@@ -92,7 +92,14 @@ locals {
           Action   = "secretsmanager:GetSecretValue"
           Effect   = "Allow"
           Resource = aws_secretsmanager_secret.api_jwt_signing_key.arn
-        }
+        },
+        var.bloom_api_fast_api_key_secret_arn != "" ? [
+          {
+            Action   = "secretsmanager:GetSecretValue"
+            Effect   = "Allow"
+            Resource = var.bloom_api_fast_api_key_secret_arn
+          }
+        ] : []
       ]
     }
     "site-partners" = {
