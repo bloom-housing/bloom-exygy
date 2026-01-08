@@ -82,7 +82,11 @@ resource "null_resource" "bloom_dbseed_run" {
 
   provisioner "local-exec" {
     interpreter = ["/usr/bin/env", "bash", "-c"]
+<<<<<<< HEAD
     command     = <<-EOT
+=======
+    command = <<-EOT
+>>>>>>> 3cb8d796c (feat: Add mechanism for running a one-off dbseed task)
       set -euo pipefail
 
       echo "Starting Bloom dbseed task..."
