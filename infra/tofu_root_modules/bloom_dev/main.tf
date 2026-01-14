@@ -64,7 +64,6 @@ output "certificate_details" {
 module "bloom_deployment" {
   source = "../../tofu_importable_modules/bloom_deployment"
 
-  aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
   aws_region         = local.bloom_aws_region
 
