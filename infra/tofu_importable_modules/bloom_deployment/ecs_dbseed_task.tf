@@ -29,6 +29,7 @@ resource "aws_ecs_task_definition" "bloom_dbseed" {
       name  = "bloom-dbseed"
       image = var.bloom_dbseed_image
 
+      # TODO: replace with IAM authentication https://github.com/bloom-housing/bloom/issues/5451
       command = [
         "/bin/bash",
         "-c",
@@ -81,7 +82,7 @@ resource "null_resource" "bloom_dbseed_run" {
 
   provisioner "local-exec" {
     interpreter = ["/usr/bin/env", "bash", "-c"]
-    command = <<-EOT
+    command     = <<-EOT
       set -euo pipefail
 
       echo "Starting Bloom dbseed task..."
