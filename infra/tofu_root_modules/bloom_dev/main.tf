@@ -73,10 +73,12 @@ module "bloom_deployment" {
 
   env_type          = "dev"
   high_availability = false
+  apply_seed        = true
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-f642fc1f3f056b9fa53429c4fa81689c5e856e5a"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-f642fc1f3f056b9fa53429c4fa81689c5e856e5a"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-f642fc1f3f056b9fa53429c4fa81689c5e856e5a"
+  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME     = "Bloomington"
     CLOUDINARY_CLOUD_NAME = "exygy"
