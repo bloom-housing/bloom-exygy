@@ -75,7 +75,7 @@ module "bloom_deployment" {
   high_availability = false
   apply_seed        = true
 
-  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
+  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-45ad0210fa887d3f9f3ad9479c1882c4a1ed9beb" # built from avritt/seed branch.
   bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
   bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
   bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
