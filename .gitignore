@@ -102,3 +102,6 @@ memory-bank/
 # Terraform providers
 .terraform
 *.tfstate
+
+infra/local/*
+infra/data_to_import.sql
