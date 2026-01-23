@@ -1,7 +1,3 @@
--- In deployment, these commands need to be run to set up the database
--- if we're using RDS or the like and not the postgres container.
--- We don't do it here because the postgres container handles it.
-
 -- Drop non-constraint indexes on public.applications (keeps PK/unique constraints)
 DO $do$
 DECLARE
