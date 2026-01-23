@@ -82,7 +82,7 @@ resource "aws_secretsmanager_secret" "api_jwt_signing_key" {
 locals {
   roles = {
     "api" = {
-      task_execution_policy_extra_statements = [
+      task_execution_policy_extra_statements = concat([
         {
           Action   = "secretsmanager:GetSecretValue"
           Effect   = "Allow"
@@ -92,8 +92,15 @@ locals {
           Action   = "secretsmanager:GetSecretValue"
           Effect   = "Allow"
           Resource = aws_secretsmanager_secret.api_jwt_signing_key.arn
-        }
-      ]
+        },
+        ],
+        var.bloom_api_fast_api_key_secret_arn != "" ? [
+          {
+            Action   = "secretsmanager:GetSecretValue"
+            Effect   = "Allow"
+            Resource = var.bloom_api_fast_api_key_secret_arn
+          }
+      ] : [])
     }
     "site-partners" = {
       task_execution_policy_extra_statements = []

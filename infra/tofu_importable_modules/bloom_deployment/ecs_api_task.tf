@@ -30,25 +30,33 @@ resource "aws_ecs_task_definition" "bloom_api" {
       command = [
         "/bin/bash",
         "-c",
-        "export DATABASE_URL=postgres://$DB_USER:$(node -e 'console.log(encodeURIComponent(process.argv[1]))' $DB_PASSWORD)@$DB_HOST/bloomprisma && env && yarn db:migration:run && yarn start:prod",
+        "export DATABASE_URL=postgres://$DB_USER:$(node -e 'console.log(encodeURIComponent(process.argv[1]))' $DB_PASSWORD)@$DB_HOST/bloomprisma && yarn db:migration:run && yarn start:prod",
       ]
-      secrets = [
-        {
-          # TODO: replace with IAM authentication https://github.com/bloom-housing/bloom/issues/5451
-          name = "DB_PASSWORD"
-          # The master_user_secret tofu attribute is a block, so it is exposed as a list even though
-          # there is only one element.
-          #
-          # The RDS managed secret has a username key and a password key. Docs for how to read
-          # a specific key out of a secret:
-          # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html#secrets-envvar-secrets-manager-update-container-definition
-          valueFrom = "${aws_db_instance.bloom.master_user_secret[0].secret_arn}:password::"
-        },
-        {
-          name      = "APP_SECRET",
-          valueFrom = aws_secretsmanager_secret.api_jwt_signing_key.arn
-        }
-      ]
+      secrets = concat(
+        [
+          {
+            # TODO: replace with IAM authentication https://github.com/bloom-housing/bloom/issues/5451
+            name = "DB_PASSWORD"
+            # The master_user_secret tofu attribute is a block, so it is exposed as a list even though
+            # there is only one element.
+            #
+            # The RDS managed secret has a username key and a password key. Docs for how to read
+            # a specific key out of a secret:
+            # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html#secrets-envvar-secrets-manager-update-container-definition
+            valueFrom = "${aws_db_instance.bloom.master_user_secret[0].secret_arn}:password::"
+          },
+          {
+            name      = "APP_SECRET",
+            valueFrom = aws_secretsmanager_secret.api_jwt_signing_key.arn
+          }
+        ],
+        var.bloom_api_fast_api_key_secret_arn != "" ? [
+          {
+            name      = "FAST_API_KEY"
+            valueFrom = var.bloom_api_fast_api_key_secret_arn
+          }
+        ] : []
+      )
       environment = [for k, v in merge(local.api_default_env_vars, var.bloom_api_env_vars) : { name = k, value = v }]
       portMappings = [
         {

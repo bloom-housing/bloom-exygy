@@ -47,6 +47,8 @@ def main():
         "bloom_dev_deployer_permission_set_policy": "bloom-dev-iam-admin",
         "bloom_prod": "bloom-prod-deployer",
         "bloom_prod_deployer_permission_set_policy": "bloom-prod-iam-admin",
+        "bloom_genai": "bloom-genai-deployer",
+        "bloom_genai_deployer_permission_set_policy": "bloom-genai-iam-admin",
     }
 
     p = argparse.ArgumentParser(
