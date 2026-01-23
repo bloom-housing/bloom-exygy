@@ -83,3 +83,4 @@ resource "aws_vpc_security_group_egress_rule" "bloom_api_to_data_explorer" {
     Name = "allow-data-explorer"
   }
 }
+

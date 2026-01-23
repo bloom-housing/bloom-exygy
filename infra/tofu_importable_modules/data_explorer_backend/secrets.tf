@@ -41,3 +41,4 @@ resource "aws_secretsmanager_secret" "api_key" {
     EOT
   }
 }
+

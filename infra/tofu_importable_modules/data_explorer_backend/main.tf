@@ -5,7 +5,7 @@ terraform {
       source  = "hashicorp/aws"
     }
     null = {
-      source = "hashicorp/null"
+      source  = "hashicorp/null"
       version = "3.2.2"
     }
   }
@@ -152,7 +152,7 @@ variable "gcp_project_id" {
   description = "GCP project ID for Vertex AI."
   default     = ""
   validation {
-    condition = var.ai_provider != "vertex_ai" || length(trimspace(var.gcp_project_id)) > 0
+    condition     = var.ai_provider != "vertex_ai" || length(trimspace(var.gcp_project_id)) > 0
     error_message = "gcp_project_id must be set when ai_provider = 'vertex_ai'."
   }
 }
@@ -223,3 +223,4 @@ output "security_group_id" {
   value       = aws_security_group.data_explorer.id
   description = "Security group ID for the data explorer backend tasks."
 }
+

@@ -166,7 +166,7 @@ resource "aws_ecs_task_definition" "data_explorer" {
         # Format: postgresql+psycopg://user:password@host:port/dbname
         "export DATABASE_URL=\"postgresql+psycopg://${aws_db_instance.data_explorer.username}:$(echo $DB_PASSWORD | sed 's|%|%25|g; s| |%20|g; s|&|%26|g; s|/|%2F|g; s|:|%3A|g; s|=|%3D|g; s|?|%3F|g; s|@|%40|g; s|\\[|%5B|g; s|]|%5D|g')@${local.db_host}/${local.db_name}\" && exec uvicorn main:app --host 0.0.0.0 --port 8000",
       ]
-      secrets = local.container_secrets
+      secrets     = local.container_secrets
       environment = [for k, v in merge(local.default_env_vars, var.data_explorer_env_vars) : { name = k, value = tostring(v) }]
       portMappings = [
         {
@@ -258,3 +258,4 @@ resource "aws_ecs_service" "data_explorer" {
     }
   }
 }
+

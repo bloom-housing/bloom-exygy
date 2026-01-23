@@ -1,5 +1,5 @@
 locals {
-  default_init_sql_path   = "${path.module}/sql/init_postgres.sql"
+  default_init_sql_path    = "${path.module}/sql/init_postgres.sql"
   default_indexes_sql_path = "${path.module}/sql/indexes.sql"
 
   init_sql_path    = length(trimspace(var.init_sql_source_path)) > 0 ? var.init_sql_source_path : local.default_init_sql_path
@@ -93,11 +93,11 @@ resource "aws_iam_role" "data_explorer_db_bootstrap_task" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
       Condition = {
-        ArnLike = { "aws:SourceArn" = "arn:aws:ecs:${var.aws_region}:${var.aws_account_number}:*" }
+        ArnLike      = { "aws:SourceArn" = "arn:aws:ecs:${var.aws_region}:${var.aws_account_number}:*" }
         StringEquals = { "aws:SourceAccount" = var.aws_account_number }
       }
     }]
@@ -234,9 +234,9 @@ resource "aws_ecs_task_definition" "data_explorer_db_bootstrap" {
       image = "chusri/postgres-client-awscli:alpine-3.21-pg17"
       environment = [
         { name = "SQL_BUCKET", value = aws_s3_bucket.data_explorer_sql[0].bucket },
-        { name = "INIT_KEY",   value = local.init_key },
-        { name = "INDEX_KEY",  value = local.indexes_key },
-        { name = "SEED_KEY",   value = local.seed_key },
+        { name = "INIT_KEY", value = local.init_key },
+        { name = "INDEX_KEY", value = local.indexes_key },
+        { name = "SEED_KEY", value = local.seed_key },
         { name = "APPLY_SEED", value = var.apply_seed ? "true" : "false" }
       ]
 
@@ -309,7 +309,7 @@ resource "null_resource" "data_explorer_db_bootstrap_run" {
 
   provisioner "local-exec" {
     interpreter = ["/usr/bin/env", "bash", "-c"]
-    command = <<-EOT
+    command     = <<-EOT
       set -euo pipefail
 
       if ! type -P aws &>/dev/null; then
@@ -370,3 +370,4 @@ resource "null_resource" "data_explorer_db_bootstrap_run" {
     EOT
   }
 }
+

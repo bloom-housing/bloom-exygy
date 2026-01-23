@@ -149,11 +149,11 @@ module "data_explorer_backend" {
   secrets_manager_endpoint_security_group_id = module.bloom_deployment.security_group_ids.secrets_manager_endpoint
 
   data_explorer_backend_image = "ghcr.io/exygy/housing-reports/bloom-genai-backend:gitsha-8c1ec44f90a3ce738ed63f1575ac5847ae9e8fe6"
-  
+
 
   cors_origins = "https://${local.domain_name},https://partners.${local.domain_name}"
 
-  gcp_project_id = var.gcp_project_id
+  gcp_project_id                     = var.gcp_project_id
   vertex_credentials_json_secret_arn = var.vertex_credentials_json_secret_arn
 }
 
@@ -171,3 +171,4 @@ output "data_explorer_database_endpoint" {
   value       = module.data_explorer_backend.database_endpoint
   description = "Endpoint of the data explorer database."
 }
+
