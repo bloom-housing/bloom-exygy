@@ -74,10 +74,10 @@ module "bloom_deployment" {
 
   apply_seed = var.bloom_apply_seed
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-0ce113e71e6f6e3d87d347406d045cdc920001a7"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-0ce113e71e6f6e3d87d347406d045cdc920001a7"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-0ce113e71e6f6e3d87d347406d045cdc920001a7"
-  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-0ce113e71e6f6e3d87d347406d045cdc920001a7"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
+  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME     = "Doorway Data Explorer Test"
     CLOUDINARY_CLOUD_NAME = "exygy"
