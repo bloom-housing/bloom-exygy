@@ -1,8 +1,9 @@
 locals {
   default_env_vars = {
-    NODE_ENV = "production"
-    DB_USER  = aws_db_instance.bloom.username
-    DB_HOST  = aws_db_instance.bloom.endpoint
+    NODE_ENV                    = "production"
+    DB_USER                     = aws_db_instance.bloom.username
+    DB_HOST                     = aws_db_instance.bloom.endpoint
+    DBSEED_PUBLIC_SITE_BASE_URL = "https://${var.domain_name}"
   }
 }
 
@@ -33,7 +34,7 @@ resource "aws_ecs_task_definition" "bloom_dbseed" {
       command = [
         "/bin/bash",
         "-c",
-        "export DATABASE_URL=postgres://$DB_USER:$(node -e 'console.log(encodeURIComponent(process.argv[1]))' $DB_PASSWORD)@$DB_HOST/bloomprisma && yarn db:seed:staging",
+        "export DATABASE_URL=postgres://$DB_USER:$(node -e 'console.log(encodeURIComponent(process.argv[1]))' $DB_PASSWORD)@$DB_HOST/bloom_prisma && yarn db:seed:staging",
       ]
 
       secrets = [
