@@ -62,7 +62,7 @@ output "certificate_details" {
 
 # Deploy bloom into the account.
 module "bloom_deployment" {
-  source = "../../tofu_importable_modules/bloom_deployment"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=avritt/rdsiam&depth=1"
 
   aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
@@ -73,17 +73,17 @@ module "bloom_deployment" {
 
   env_type          = "dev"
   high_availability = false
-  apply_seed        = true
 
-  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-45ad0210fa887d3f9f3ad9479c1882c4a1ed9beb" # built from avritt/seed branch.
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
+  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-4080fd20334cd2d5750696ea188fbf403569e6ed"
+  bloom_dbseed_image      = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-4080fd20334cd2d5750696ea188fbf403569e6ed"
+
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-4080fd20334cd2d5750696ea188fbf403569e6ed"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-0ab5da9c5cd4b391ba07ef385e84265f58560afe"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-0ab5da9c5cd4b391ba07ef385e84265f58560afe"
   bloom_site_public_env_vars = {
-    JURISDICTION_NAME     = "Bloomington"
-    CLOUDINARY_CLOUD_NAME = "exygy"
-    LANGUAGES             = "en,es,zh,vi,tl"
-    RTL_LANGUAGES         = "ar"
+    JURISDICTION_NAME = "Bloomington"
+    LANGUAGES         = "en,es,zh,vi,tl"
+    RTL_LANGUAGES     = "ar"
   }
 }
 output "aws_lb_dns_name" {
