@@ -9,7 +9,8 @@ terraform {
 
 variable "aws_profile" {
   type        = string
-  description = "AWS CLI profile to use when running aws commands in local-exec provisioners."
+  description = "Optional AWS CLI profile to use when running aws commands in local-exec provisioners. IMPORTANT: if not specified, you must authenticate the AWS CLI some other way like with environment variables."
+  default     = ""
 }
 variable "aws_account_number" {
   type        = number
@@ -44,6 +45,37 @@ variable "vpc_cidr_range" {
     condition     = cidrnetmask(var.vpc_cidr_range) == cidrnetmask("10.0.0.0/22")
     error_message = "Must be a /22."
   }
+}
+variable "vpc_peering_settings" {
+  type = object({
+    aws_account_number        = number
+    vpc_id                    = string
+    allowed_security_group_id = string
+    allowed_cidr_range        = string
+  })
+  description = "Details of an existing VPC. If not null, a VPC peering request from the Bloom VPC will be created. Processes in the allowed_cidr_range and allowed_security_group_id in the existing VPC will be allowed to send traffic to the Bloom database."
+  default     = null
+  validation {
+    condition = var.vpc_peering_settings == null || (
+      var.vpc_peering_settings.aws_account_number != 0 &&
+      var.vpc_peering_settings.vpc_id != "" &&
+      var.vpc_peering_settings.allowed_security_group_id != "" &&
+      var.vpc_peering_settings.allowed_cidr_range != ""
+    )
+    error_message = "All fields of vpc_peering_settings must be set to non-empty values."
+  }
+  validation {
+    condition = var.vpc_peering_settings == null || (
+      cidrcontains("10.0.0.0/8", var.vpc_peering_settings.allowed_cidr_range) ||
+      cidrcontains("172.16.0.0/12", var.vpc_peering_settings.allowed_cidr_range) ||
+      cidrcontains("192.168.0.0/16", var.vpc_peering_settings.allowed_cidr_range)
+    )
+    error_message = "CIDR range in peered VPC must be in the RFC 1918 private IP space."
+  }
+}
+variable "ses_identities" {
+  type        = list(string)
+  description = "SES email identities to create. Can either be individual email addresses or domains. If SES in this Bloom deployment will not be taken out of sandbox mode, identities for both sender and receiver email address must be validated for email to be succefully delivered."
 }
 variable "high_availability" {
   type        = bool
@@ -110,6 +142,27 @@ locals {
   ecs_logs_retention_days = var.ecs_logs_retention_days != null ? var.ecs_logs_retention_days : (local.is_prod ? 30 : 3)
 }
 
+variable "bloom_dbinit_image" {
+  type        = string
+  description = "Container image for the Bloom dbinit process."
+}
+variable "bloom_dbinit_run_number" {
+  type        = number
+  description = "The run number is used to trigger additional runs of the dbinit process. The dbinit process will not be re-triggered unless the run number is changed."
+  default     = 1
+}
+
+variable "bloom_dbseed_image" {
+  type        = string
+  description = "Container image for the Bloom dbseed process. Leave empty to disable running the dbseed process."
+  default     = ""
+}
+variable "bloom_dbseed_run_number" {
+  type        = number
+  description = "The run number is used to trigger additional runs of the dbseed process. The dbseed process will not be re-triggered unless the run number is changed."
+  default     = 1
+}
+
 variable "bloom_api_image" {
   type        = string
   description = "Container image for the Bloom API."
@@ -119,24 +172,10 @@ variable "bloom_api_env_vars" {
   description = "Environment variables for the Bloom API tasks. This is merged with the default env vars set in the ecs_api_task.tf file, with these variables taking precedence."
   default     = {}
 }
-variable "bloom_api_fast_api_key_secret_arn" {
-  type        = string
-  description = "Secrets Manager ARN containing the housing-reports backend API key. Injected into bloom-api as FAST_API_KEY."
-  default     = ""
-}
 variable "bloom_api_task_count" {
   description = "How many API tasks that should be running. Default is provided based on the high_availability setting."
   type        = number
   default     = null
-}
-variable "bloom_dbseed_image" {
-  type        = string
-  description = "Container image for the Bloom dbseed image."
-}
-variable "apply_seed" {
-  type        = string
-  description = "When true, deploy the dbseed container to facilitate Bloom database seeding."
-  default     = false
 }
 locals {
   bloom_api_task_count = var.bloom_api_task_count != null ? var.bloom_api_task_count : (var.high_availability ? 2 : 1)

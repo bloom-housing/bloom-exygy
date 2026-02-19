@@ -1,21 +1,6 @@
-locals {
-  dbseed_env_vars = {
-    PORT                        = "3100"
-    NODE_ENV                    = "production"
-    DB_HOST                     = aws_db_instance.bloom.address
-    DB_PORT                     = "5432"
-    DB_USER                     = "bloom_api"
-    DB_DATABASE                 = "bloom_prisma"
-    DB_USE_RDS_IAM_AUTH         = "1"
-    DBSEED_PUBLIC_SITE_BASE_URL = "https://${var.domain_name}"
-  }
-}
-
-resource "aws_ecs_task_definition" "bloom_dbseed" {
-  count = var.bloom_dbseed_image == "" ? 0 : 1
-
+resource "aws_ecs_task_definition" "bloom_dbinit" {
   region                   = var.aws_region
-  family                   = "bloom-dbseed"
+  family                   = "bloom-dbinit"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
 
@@ -24,25 +9,41 @@ resource "aws_ecs_task_definition" "bloom_dbseed" {
     cpu_architecture        = "X86_64"
   }
 
-  execution_role_arn = aws_iam_role.bloom_ecs["dbseed"].arn
-  task_role_arn      = aws_iam_role.bloom_container["dbseed"].arn
+  execution_role_arn = aws_iam_role.bloom_ecs["dbinit"].arn
+  task_role_arn      = aws_iam_role.bloom_container["dbinit"].arn
 
   # Keep in sync with docker-compose.yml
-  cpu    = 1024     # 1 vCPU
-  memory = 4 * 1024 # 4 GiB in MiB
+  cpu    = 256 # 0.25 vCPU
+  memory = 512 # MiB
 
   container_definitions = jsonencode([
     {
-      name        = "bloom-dbseed"
-      image       = var.bloom_dbseed_image
-      environment = [for k, v in local.dbseed_env_vars : { name = k, value = v }]
+      name  = "bloom-dbinit"
+      image = var.bloom_dbinit_image
+
+      secrets = [
+        {
+          name      = "PGPASSWORD"
+          valueFrom = "${aws_db_instance.bloom.master_user_secret[0].secret_arn}:password::"
+        }
+      ]
+      entryPoint = ["psql"]
+      command = [
+        "--host=${aws_db_instance.bloom.address}",
+        "--port=5432",
+        "--dbname=postgres",
+        "--username=${aws_db_instance.bloom.username}",
+        "--echo-queries",
+        "--echo-hidden",
+        "--file=rds.init.sql",
+      ]
 
       logConfiguration = {
         logDriver = "awslogs"
         options = {
           "awslogs-region"        = var.aws_region
-          "awslogs-group"         = aws_cloudwatch_log_group.task_logs["bloom-dbseed"].name
-          "awslogs-stream-prefix" = "bloom-dbseed"
+          "awslogs-group"         = aws_cloudwatch_log_group.task_logs["bloom-dbinit"].name
+          "awslogs-stream-prefix" = "bloom-dbinit"
         }
       }
     }
@@ -51,35 +52,29 @@ resource "aws_ecs_task_definition" "bloom_dbseed" {
 
 // Avoids the error :
 //
-// module.bloom_deployment.null_resource.bloom_dbseed_run (local-exec): An error occurred
+// module.bloom_deployment.null_resource.bloom_dbinit_run (local-exec): An error occurred
 // (ClientException) when calling the RunTask operation: ECS was unable to assume the role
-// 'arn:aws:iam::x:role/bloom-dbseed-container' that was provided for this task.
-resource "time_sleep" "on_dbseed_container_role_creation" {
-  count = var.bloom_dbseed_image == "" ? 0 : 1
-
+// 'arn:aws:iam::x:role/bloom-dbinit-container' that was provided for this task.
+resource "time_sleep" "on_dbinit_container_role_creation" {
   depends_on = [
-    aws_iam_role_policy.bloom_ecs["dbseed"],
-    aws_iam_role_policy.bloom_container["dbseed"],
+    aws_iam_role_policy.bloom_ecs["dbinit"],
+    aws_iam_role_policy.bloom_container["dbinit"],
   ]
   create_duration = "30s"
 }
 
 # TODO: remove local exec provisioner once
 # https://github.com/hashicorp/terraform-provider-aws/issues/29871 is implemented.
-resource "null_resource" "bloom_dbseed_run" {
-  count = var.bloom_dbseed_image == "" ? 0 : 1
-
+resource "null_resource" "bloom_dbinit_run" {
   triggers = {
-    run_number     = var.bloom_dbseed_run_number
+    run_number     = var.bloom_dbinit_run_number
     db_instance_id = aws_db_instance.bloom.id
   }
 
   depends_on = [
     aws_vpc_endpoint.aws_services["secretsmanager"],
     aws_route_table_association.private_subnet,
-    time_sleep.on_dbseed_container_role_creation,
-    null_resource.bloom_dbinit_run,
-    aws_ecs_service.bloom_api, # need API to apply migrations before seed can run.
+    time_sleep.on_dbinit_container_role_creation,
   ]
 
   provisioner "local-exec" {
@@ -87,22 +82,22 @@ resource "null_resource" "bloom_dbseed_run" {
     command     = <<-EOT
       set -euo pipefail
 
-      echo "Starting Bloom dbseed task..."
+      echo "Starting Bloom dbinit task..."
 
       task_arn="$(
         aws ecs run-task \
-           ${var.aws_profile != "" ? "--profile ${var.aws_profile}" : ""} \
+          ${var.aws_profile != "" ? "--profile ${var.aws_profile}" : ""} \
           --region ${var.aws_region} \
           --cluster ${aws_ecs_cluster.bloom.arn} \
           --launch-type FARGATE \
-          --task-definition ${aws_ecs_task_definition.bloom_dbseed[0].arn} \
-          --network-configuration "awsvpcConfiguration={subnets=[${join(",", [for s in aws_subnet.private : s.id])}],securityGroups=[${aws_security_group.bloom["dbseed"].id}],assignPublicIp=DISABLED}" \
+          --task-definition ${aws_ecs_task_definition.bloom_dbinit.arn} \
+          --network-configuration "awsvpcConfiguration={subnets=[${join(",", [for s in aws_subnet.private : s.id])}],securityGroups=[${aws_security_group.bloom["dbinit"].id}],assignPublicIp=DISABLED}" \
           --query 'tasks[0].taskArn' \
           --output text
       )"
 
       if [ -z "$task_arn" ] || [ "$task_arn" = "None" ]; then
-        echo "ERROR: failed to start Bloom dbseed task" >&2
+        echo "ERROR: failed to start Bloom dbinit task" >&2
         exit 1
       fi
 
@@ -134,11 +129,11 @@ resource "null_resource" "bloom_dbseed_run" {
             --query 'tasks[0].stoppedReason' \
             --output text
         )"
-        echo "ERROR: Bloom dbseed task failed (exitCode=$exit_code). stoppedReason=$reason" >&2
+        echo "ERROR: Bloom dbinit task failed (exitCode=$exit_code). stoppedReason=$reason" >&2
         exit 1
       fi
 
-      echo "Bloom dbseed task succeeded."
+      echo "Bloom dbinit task succeeded."
     EOT
   }
 }

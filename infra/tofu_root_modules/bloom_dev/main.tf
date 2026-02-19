@@ -55,7 +55,7 @@ output "certificate_details" {
       eligible = aws_acm_certificate.bloom.renewal_eligibility
       status   = aws_acm_certificate.bloom.renewal_summary
     }
-    validation_dns_recods = aws_acm_certificate.bloom.domain_validation_options
+    validation_dns_records = aws_acm_certificate.bloom.domain_validation_options
   }
   description = "DNS records required to be manually added for the LB TLS certificate to be issued."
 }
@@ -71,22 +71,42 @@ module "bloom_deployment" {
   domain_name         = aws_acm_certificate.bloom.domain_name
   aws_certificate_arn = aws_acm_certificate.bloom.arn
 
+  ses_identities = [
+    "exygy.dev",             # to test sending (from bloom-no-reply@exygy.dev)
+    "dev-services@exygy.com" # to test receiving
+  ]
+
   env_type          = "dev"
   high_availability = false
-  apply_seed        = true
 
-  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-45ad0210fa887d3f9f3ad9479c1882c4a1ed9beb" # built from avritt/seed branch.
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-7d29c045bf4a3fe8dd39acb5f44fd44677c1b38e"
+  vpc_peering_settings = {
+    aws_account_number        = 206362095778            # bloom-dev-exising-db-account
+    vpc_id                    = "vpc-03abaa897db701e41" # default in us-west-2
+    allowed_security_group_id = "sg-01babe8cf3bc017c2"  # default
+    allowed_cidr_range        = "172.31.0.0/16"         # default
+  }
+
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
+
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
   bloom_site_public_env_vars = {
-    JURISDICTION_NAME     = "Bloomington"
-    CLOUDINARY_CLOUD_NAME = "exygy"
-    LANGUAGES             = "en,es,zh,vi,tl"
-    RTL_LANGUAGES         = "ar"
+    JURISDICTION_NAME = "Bloomington"
+    LANGUAGES         = "en,es,zh,vi,tl,ko,hy"
+    RTL_LANGUAGES     = "ar,fa"
   }
 }
 output "aws_lb_dns_name" {
   value       = module.bloom_deployment.lb_dns_name
   description = "DNS name of the load balancer."
+}
+output "aws_db_dns_name" {
+  value       = module.bloom_deployment.db_dns_name
+  description = "DNS name of the database."
+}
+output "ses_details" {
+  value       = module.bloom_deployment.ses_details
+  description = "Details for the SES email address identity."
 }

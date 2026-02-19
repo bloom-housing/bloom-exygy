@@ -20,8 +20,8 @@ output "service_discovery_namespace_arn" {
 
 output "security_group_ids" {
   value = {
-    api                      = aws_security_group.api.id
-    secrets_manager_endpoint = aws_security_group.secrets_manager_endpoint.id
+    api                      = aws_security_group.bloom["api"].id
+    secrets_manager_endpoint = aws_security_group.aws_privatelink_services["secretsmanager"].id
   }
   description = "Security group IDs for Bloom components."
 }

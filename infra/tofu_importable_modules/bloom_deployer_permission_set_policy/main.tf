@@ -43,6 +43,59 @@ resource "aws_ssoadmin_permission_set_inline_policy" "deployer" {
   inline_policy      = data.aws_iam_policy_document.deployer.json
 }
 data "aws_iam_policy_document" "deployer" {
+  # TODO: we should have a separate permission set for humans debugging / looking at stuff through
+  # the AWS web console. For now, just collect the added permissions for the web console that are
+  # not required when running tofu apply.
+  statement {
+    sid = "HumanConsoleUser"
+    actions = [
+      "application-autoscaling:DescribeScalableTargets",
+      "cloudwatch:Describe*",
+      "cloudwatch:Get*",
+      "cloudwatch:List*",
+      "dms:ListDataProviders",
+      "ec2:Describe*",
+      "ecs:List*",
+      "elasticloadbalancing:Describe*",
+      "events:Describe*",
+      "events:Get*",
+      "events:List*",
+      "logs:Describe*",
+      "logs:FilterLogEvents",
+      "logs:Get*",
+      "logs:List*",
+      "logs:StartQuery",
+      "logs:StopQuery",
+      "logs:TestMetricFilter",
+      "rds:Describe*",
+      "rds:Get*",
+      "rds:List*",
+      "servicediscovery:DiscoverInstances",
+      "servicediscovery:Get*",
+      "servicediscovery:List*",
+    ]
+    resources = ["*"]
+  }
+  statement {
+    sid = "HumanCloudshellUser"
+    actions = [
+      "cloudshell:CreateEnvironment",
+      "cloudshell:CreateSession",
+      "cloudshell:DeleteEnvironment",
+      "cloudshell:DescribeEnvironments",
+      "cloudshell:GetEnvironmentStatus",
+      "cloudshell:PutCredentials",
+      "cloudshell:StartEnvironment",
+      "cloudshell:StopEnvironment",
+      "ec2:CreateNetworkInterface",
+      "ec2:CreateNetworkInterfacePermission",
+      "ec2:CreateTags",
+      "ec2:DeleteNetworkInterface",
+      "rds-db:connect",
+    ]
+    resources = ["*"]
+    # TODO: condition that the correct security group and subnet is used
+  }
   statement {
     sid = "TofuStateBucket"
     actions = [
@@ -109,6 +162,7 @@ data "aws_iam_policy_document" "deployer" {
       "ec2:DescribeSecurityGroups",
       "ec2:DescribeSubnets",
       "ec2:DescribeVpcEndpoints",
+      "ec2:DescribeVpcPeeringConnections",
       "ec2:DescribeVpcs",
       "elasticloadbalancing:DescribeListenerAttributes",
       "elasticloadbalancing:DescribeListeners",
@@ -146,17 +200,21 @@ data "aws_iam_policy_document" "deployer" {
       "ec2:CreateTags",
       "ec2:CreateVpc",
       "ec2:CreateVpcEndpoint",
+      "ec2:CreateVpcPeeringConnection",
       "ec2:DeleteInternetGateway",
       "ec2:DeleteNatGateway",
+      "ec2:DeleteRoute",
       "ec2:DeleteRouteTable",
       "ec2:DeleteSecurityGroup",
       "ec2:DeleteSubnet",
       "ec2:DeleteVPC",
       "ec2:DeleteVpcEndpoints",
+      "ec2:DeleteVpcPeeringConnection",
       "ec2:DescribeVpcAttribute",
       "ec2:DetachInternetGateway",
       "ec2:DisassociateRouteTable",
       "ec2:DisassociateVpcCidrBlock",
+      "ec2:ModifySecurityGroupRules",
       "ec2:ModifySubnetAttribute",
       "ec2:ModifyVpcAttribute",
       "ec2:ModifyVpcEndpoint",
@@ -187,6 +245,7 @@ data "aws_iam_policy_document" "deployer" {
       "arn:aws:ec2:${local.region_account}:security-group/*",
       "arn:aws:ec2:${local.region_account}:subnet/*",
       "arn:aws:ec2:${local.region_account}:vpc-endpoint/*",
+      "arn:aws:ec2:${local.region_account}:vpc-peering-connection/*",
       "arn:aws:ec2:${local.region_account}:vpc/*",
       "arn:aws:elasticloadbalancing:${local.region_account}:listener-rule/app/bloom/*",
       "arn:aws:elasticloadbalancing:${local.region_account}:listener/app/bloom/*",
@@ -276,7 +335,6 @@ data "aws_iam_policy_document" "deployer" {
       "ecs:ListServiceDeployments",
       "ecs:ListTagsForResource",
       "ecs:RegisterTaskDefinition",
-      "ecs:RunTask",
       "ecs:UpdateCluster",
       "ecs:UpdateService",
       "iam:CreateRole",
@@ -300,23 +358,28 @@ data "aws_iam_policy_document" "deployer" {
       "servicediscovery:GetOperation",
       "servicediscovery:ListTagsForResource",
     ]
-    resources = concat(
-      [
-        "arn:aws:ecs:${local.region_account}:cluster/bloom",
-        "arn:aws:logs:${local.region_account}:log-group::log-stream:",
-        "arn:aws:servicediscovery:${local.region_account}:*/*"
-      ],
-      flatten(
-        [for name in ["dbseed", "api", "site-partners", "site-public"] : [
-          "arn:aws:ecs:${local.region_account}:service-deployment/bloom/bloom-${name}/*",
-          "arn:aws:ecs:${local.region_account}:service/bloom/bloom-${name}",
-          "arn:aws:ecs:${local.region_account}:task-definition/bloom-${name}:*",
-          "arn:aws:ecs:${local.region_account}:task/bloom/*",
-          "arn:aws:iam::${var.bloom_deployment_aws_account_number}:role/bloom-${name}-container",
-          "arn:aws:iam::${var.bloom_deployment_aws_account_number}:role/bloom-${name}-ecs",
-          "arn:aws:logs:${local.region_account}:log-group:bloom-${name}*",
-        ]]
-    ))
+    resources = [
+      "arn:aws:ecs:${local.region_account}:cluster/bloom",
+      "arn:aws:ecs:${local.region_account}:service-deployment/bloom/bloom-*",
+      "arn:aws:ecs:${local.region_account}:service/bloom/bloom-*",
+      "arn:aws:ecs:${local.region_account}:task-definition/bloom-*",
+      "arn:aws:ecs:${local.region_account}:task/bloom/*",
+      "arn:aws:iam::${var.bloom_deployment_aws_account_number}:role/bloom-*",
+      "arn:aws:iam::${var.bloom_deployment_aws_account_number}:role/bloom-*",
+      "arn:aws:logs:${local.region_account}:log-group::log-stream:",
+      "arn:aws:logs:${local.region_account}:log-group:bloom-*",
+      "arn:aws:servicediscovery:${local.region_account}:*/*",
+    ]
+  }
+  statement {
+    sid = "RunECSTask"
+    actions = [
+      "ecs:RunTask",
+    ]
+    resources = [
+      "arn:aws:ecs:${local.region_account}:task-definition/bloom-dbinit:*",
+      "arn:aws:ecs:${local.region_account}:task-definition/bloom-dbseed:*",
+    ]
   }
   statement {
     sid = "APIJWTKeySecret"
@@ -330,5 +393,15 @@ data "aws_iam_policy_document" "deployer" {
       "secretsmanager:TagResource",
     ]
     resources = ["arn:aws:secretsmanager:${local.region_account}:secret:bloom-api-jwt-signing-key*"]
+  }
+  statement {
+    sid = "SES"
+    actions = [
+      "ses:CreateEmailIdentity",
+      "ses:DeleteEmailIdentity",
+      "ses:GetEmailIdentity",
+      "ses:ListTagsForResource",
+    ]
+    resources = ["arn:aws:ses:${local.region_account}:identity/*"]
   }
 }
