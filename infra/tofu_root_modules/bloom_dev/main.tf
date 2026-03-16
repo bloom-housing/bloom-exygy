@@ -32,9 +32,9 @@ provider "aws" {
   region  = local.bloom_aws_region
 }
 
-# We need to create and validate a certificate for bloom_deployment module to deploy
-# successfully. See the README.md for more details for how to deploy and validate the certificate
-# before deploying the bloom_deployment module.
+# Create and validate a certificate for bloom_deployment module to deploy successfully. See the
+# README.md for more details for how to deploy and validate the certificate before deploying the
+# bloom_deployment module.
 resource "aws_acm_certificate" "bloom" {
   region            = local.bloom_aws_region
   validation_method = "DNS"
@@ -75,6 +75,10 @@ module "bloom_deployment" {
     "exygy.dev",             # to test sending (from bloom-no-reply@exygy.dev)
     "dev-services@exygy.com" # to test receiving
   ]
+  google_translate_settings = {
+    project_id = "100339497402124376379"
+    iam_user   = "bloom-translate@bloom-320514.iam.gserviceaccount.com"
+  }
 
   env_type          = "dev"
   high_availability = false
@@ -86,12 +90,14 @@ module "bloom_deployment" {
     allowed_cidr_range        = "172.31.0.0/16"         # default
   }
 
-  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
-  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-86149f7eab1a3f9ef8a798fc6a7fff9debe05dc7"
+  bloom_dbinit_run_number = 4
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-86149f7eab1a3f9ef8a798fc6a7fff9debe05dc7"
+  bloom_dbseed_run_number = 3
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-109c14a922d6a41f7fea37783038a3e567d761cd"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-86149f7eab1a3f9ef8a798fc6a7fff9debe05dc7" # built from avritt/apikeys branch
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-86149f7eab1a3f9ef8a798fc6a7fff9debe05dc7"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-86149f7eab1a3f9ef8a798fc6a7fff9debe05dc7"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME = "Bloomington"
     LANGUAGES         = "en,es,zh,vi,tl,ko,hy"
