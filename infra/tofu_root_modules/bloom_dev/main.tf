@@ -90,9 +90,9 @@ module "bloom_deployment" {
     allowed_cidr_range        = "172.31.0.0/16"         # default
   }
 
-  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
+  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
   bloom_dbinit_run_number = 4
-  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
+  bloom_dbseed_image      = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
   bloom_dbseed_run_number = 3
 
   bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
