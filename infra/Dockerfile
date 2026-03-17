@@ -33,6 +33,7 @@ set -e
 dnf update -y
 dnf install -y shadow-utils # make groupadd and useradd available.
 dnf install -y openssl
+dnf install -y git # used to import tofu modules by git
 dnf clean all # clean the dnf cache from the final image.
 EOF
 
