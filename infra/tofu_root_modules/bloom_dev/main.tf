@@ -62,7 +62,7 @@ output "certificate_details" {
 
 # Deploy bloom into the account.
 module "bloom_deployment" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=s3_metadata_take_2&depth=1"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=a041217710accea4f39838f6a6441cb44912f0d6"
 
   aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
@@ -90,14 +90,14 @@ module "bloom_deployment" {
     allowed_cidr_range        = "172.31.0.0/16"         # default
   }
 
-  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
+  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-a041217710accea4f39838f6a6441cb44912f0d6"
   bloom_dbinit_run_number = 4
-  bloom_dbseed_image      = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
+  bloom_dbseed_image      = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-a041217710accea4f39838f6a6441cb44912f0d6"
   bloom_dbseed_run_number = 3
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-430c704a65db67b30d4a457d6fde764dc59986b4"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-a041217710accea4f39838f6a6441cb44912f0d6"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-a041217710accea4f39838f6a6441cb44912f0d6"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-a041217710accea4f39838f6a6441cb44912f0d6"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME = "Bloomington"
     LANGUAGES         = "en,es,zh,vi,tl,ko,hy"
