@@ -12,7 +12,7 @@ variable "aws_profile" {
   description = "AWS CLI profile to use when running aws commands in local-exec provisioners."
 }
 variable "aws_account_number" {
-  type        = number
+  type        = string
   description = "AWS account number that is being configured."
 }
 variable "aws_region" {
