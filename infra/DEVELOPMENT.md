@@ -56,7 +56,7 @@ docker container run --rm -it \
 -v ./infra:/bloom/infra:z \
 -v "${HOME}/.aws/cli":/home/.aws/cli:z \
 -v "${HOME}/.aws/sso/cache":/home/.aws/sso/cache:z \
-ghcr.io/bloom-housing/bloom/infra-dev \
+ghcr.io/bloom-housing/bloom/infra-dev:gitbranch-main-latest \
 [[--skip-sso] | [--skip-init]] <ROOT_MODULE_NAME> <OPEN_TOFU_ARGS>
 ```
 
