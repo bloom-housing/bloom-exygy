@@ -72,7 +72,7 @@ module "bloom_deployment" {
   aws_certificate_arn = aws_acm_certificate.bloom.arn
 
   ses_identities = [
-    #"exygy.dev", # (sending from bloom-no-reply@exygy.dev)
+    "exygy.dev", # (sending from bloom-no-reply@exygy.dev)
   ]
   google_translate_settings = {
     project_id = "100339497402124376379"
@@ -90,6 +90,8 @@ module "bloom_deployment" {
   #}
 
   bloom_dbinit_image = "ghcr.io/bloom-housing/bloom-la/dbinit:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_dbinit_run_number = 2
+
   bloom_api_image    = "ghcr.io/bloom-housing/bloom-la/api:gitsha-500b98b8db4072df2397e336510438a268c47f20"
   bloom_api_env_vars = {
     AUTH_LOCK_LOGIN_AFTER_FAILED_ATTEMPTS = "5"
