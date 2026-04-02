@@ -89,10 +89,10 @@ module "bloom_deployment" {
   #  allowed_cidr_range        = "172.31.0.0/16"         # default
   #}
 
-  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom-la/dbinit:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom-la/dbinit:gitsha-500b98b8db4072df2397e336510438a268c47f20"
   bloom_dbinit_run_number = 2
 
-  bloom_api_image    = "ghcr.io/bloom-housing/bloom-la/api:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_api_image = "ghcr.io/bloom-housing/bloom-la/api:gitsha-500b98b8db4072df2397e336510438a268c47f20"
   bloom_api_env_vars = {
     AUTH_LOCK_LOGIN_AFTER_FAILED_ATTEMPTS = "5"
     AUTH_LOCK_LOGIN_COOLDOWN              = "1800000"
