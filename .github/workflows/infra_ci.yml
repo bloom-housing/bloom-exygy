@@ -47,7 +47,7 @@ jobs:
         id: find
         shell: bash
         run: |
-          NAMES=$(ls -d ./infra/tofu_root_modules/*/ | jq --raw-input | jq --slurp --compact-output)
+          NAMES=$(ls -d ./infra/tofu_root_modules/*/ | xargs -n1 basename | jq --raw-input | jq --slurp --compact-output)
 
           if [[ "$NAMES" == "" ]]; then
             echo 'ERROR: jq returned the empty string, expected a list'
