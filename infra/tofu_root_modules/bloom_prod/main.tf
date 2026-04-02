@@ -15,16 +15,16 @@ terraform {
 }
 
 locals {
-  bloom_deployment = "bloom-dev"
+  bloom_deployment = "bloom-prod"
   sso_profile_id   = "${local.bloom_deployment}-deployer"
 
   tofu_state_bucket_region = "us-east-1"
   tofu_state_bucket_name   = "bloom-core-tofu-state-files"
   tofu_state_key_prefix    = local.bloom_deployment
 
-  bloom_aws_account_number = 242477209009
+  bloom_aws_account_number = 966936071156
   bloom_aws_region         = "us-west-2"
-  domain_name              = "core-dev.bloomhousing.dev"
+  domain_name              = "core-prodlike.bloomhousing.dev"
 }
 
 provider "aws" {
@@ -72,16 +72,15 @@ module "bloom_deployment" {
   aws_certificate_arn = aws_acm_certificate.bloom.arn
 
   ses_identities = [
-    "exygy.dev",             # to test sending (from bloom-no-reply@exygy.dev)
-    "dev-services@exygy.com" # to test receiving
+    "exygy.dev", # (sending from bloom-no-reply@exygy.dev)
   ]
   google_translate_settings = {
     project_id = "100339497402124376379"
     iam_user   = "bloom-translate@bloom-320514.iam.gserviceaccount.com"
   }
 
-  env_type          = "dev"
-  high_availability = false
+  env_type          = "production"
+  high_availability = true
 
   #vpc_peering_settings = {
   #  aws_account_number        = 206362095778            # bloom-dev-exising-db-account
@@ -90,21 +89,39 @@ module "bloom_deployment" {
   #  allowed_cidr_range        = "172.31.0.0/16"         # default
   #}
 
-  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
-  bloom_dbseed_image      = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom-la/dbinit:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_dbinit_run_number = 2
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  bloom_api_image    = "ghcr.io/bloom-housing/bloom-la/api:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_api_env_vars = {
+    AUTH_LOCK_LOGIN_AFTER_FAILED_ATTEMPTS = "5"
+    AUTH_LOCK_LOGIN_COOLDOWN              = "1800000"
+    DUPLICATES_CLOSE_DATE                 = "\"2022-07-28 00:00 -08:00\""
+    MFA_CODE_LENGTH                       = "5"
+    MFA_CODE_VALID                        = "60000"
+    THROLLE_LIMIT                         = "100"
+    THROTTLE_TTL                          = "180000"
+    TIME_ZONE                             = "America/Los_Angeles"
+  }
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom-la/partners:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_site_partners_env_vars = {
+    APPLICATION_EXPORT_AS_SPREADSHEET = "TRUE"
+    SHOW_DUPLICATES                   = "TRUE"
+    SHOW_LOTTERY                      = "FALSE"
+    SHOW_SMS_MFA                      = "FALSE"
+  }
+  bloom_site_public_image = "ghcr.io/bloom-housing/bloom-la/public:gitsha-500b98b8db4072df2397e336510438a268c47f20"
   bloom_site_public_env_vars = {
-    JURISDICTION_NAME = "Bloomington"
-    LANGUAGES         = "en,es,zh,vi,tl,ko,hy"
-    RTL_LANGUAGES     = "ar,fa"
+    JURISDICTION_NAME      = "Los Angeles"
+    LANGUAGES              = "en,es,zh,vi,tl,ko,hy,fa"
+    MAX_BROWSE_LISTINGS    = "20"
+    SHOW_MANDATED_ACCOUNTS = "TRUE"
+    SHOW_NEW_SEEDS_DESIGNS = "TRUE"
   }
 
   bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
   grafana_editor_group_ids = [
-    "f49854e8-4081-7033-9fd0-290a48f1a15a" # bloom-dev-deployers
+    "b4680488-f001-70d7-ffc0-306719591374" # bloom-prodlike-deployers
   ]
 }
 output "aws_lb_dns_name" {
