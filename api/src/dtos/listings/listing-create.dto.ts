@@ -1,7 +1,7 @@
 import { AddressCreate } from '../addresses/address-create.dto';
 import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { ApplicationMethodCreate } from '../application-methods/application-method-create.dto';
-import { ArrayMaxSize, Validate, ValidateNested } from 'class-validator';
+import { Validate, ValidateNested } from 'class-validator';
 import { Expose, Type } from 'class-transformer';
 import { ListingEventCreate } from './listing-event-create.dto';
 import { ListingFeaturesCreate } from './listing-feature-create.dto';
@@ -17,6 +17,7 @@ import {
 } from '../../decorators/validate-units-required.decorator';
 import { ValidateListingPublish } from '../../decorators/validate-listing-publish.decorator';
 import { ValidationsGroupsEnum } from '../../enums/shared/validation-groups-enum';
+import { ListingParkingTypeCreate } from './listing-parking-type-create.dto';
 
 export class ListingCreate extends OmitType(ListingUpdate, [
   'applicationMethods',
@@ -41,7 +42,6 @@ export class ListingCreate extends OmitType(ListingUpdate, [
   })
   @ValidateNested({ groups: [ValidationsGroupsEnum.default], each: true })
   @Type(() => UnitCreate)
-  @ArrayMaxSize(256, { groups: [ValidationsGroupsEnum.default] })
   @ApiPropertyOptional({ type: UnitCreate, isArray: true })
   units?: UnitCreate[];
 
@@ -143,6 +143,15 @@ export class ListingCreate extends OmitType(ListingUpdate, [
   @Type(() => ListingUtilitiesCreate)
   @ApiPropertyOptional({ type: ListingUtilitiesCreate })
   listingUtilities?: ListingUtilitiesCreate;
+
+  @Expose()
+  @ValidateListingPublish('parkingType', {
+    groups: [ValidationsGroupsEnum.default],
+  })
+  @ValidateNested({ groups: [ValidationsGroupsEnum.default], each: true })
+  @Type(() => ListingParkingTypeCreate)
+  @ApiPropertyOptional({ type: ListingParkingTypeCreate })
+  parkType?: ListingParkingTypeCreate;
 
   @Expose()
   @ValidateListingPublish('listingNeighborhoodAmenities', {

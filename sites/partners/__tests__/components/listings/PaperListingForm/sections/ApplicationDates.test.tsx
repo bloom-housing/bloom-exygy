@@ -1,10 +1,10 @@
 import React from "react"
 import { setupServer } from "msw/node"
 import { screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { FormProviderWrapper, mockNextRouter, render } from "../../../../testUtils"
 import { FormListing } from "../../../../../src/lib/listings/formTypes"
 import ApplicationDates from "../../../../../src/components/listings/PaperListingForm/sections/ApplicationDates"
-import userEvent from "@testing-library/user-event"
 
 const server = setupServer()
 
@@ -25,9 +25,10 @@ describe("ApplicationDates", () => {
     render(
       <FormProviderWrapper>
         <ApplicationDates
-          jurisdiction="JurisdictionA"
+          enableMarketingFlyer={false}
           enableMarketingStatus={false}
           enableMarketingStatusMonths={false}
+          enableAutopublish={false}
           listing={{} as unknown as FormListing}
           requiredFields={[]}
           openHouseEvents={[]}
@@ -60,7 +61,6 @@ describe("ApplicationDates", () => {
     render(
       <FormProviderWrapper>
         <ApplicationDates
-          jurisdiction="JurisdictionA"
           enableMarketingStatus={false}
           enableMarketingStatusMonths={false}
           listing={{} as unknown as FormListing}
@@ -81,7 +81,6 @@ describe("ApplicationDates", () => {
     render(
       <FormProviderWrapper>
         <ApplicationDates
-          jurisdiction="JurisdictionA"
           enableMarketingStatus={true}
           enableMarketingStatusMonths={false}
           listing={{} as unknown as FormListing}
@@ -115,7 +114,6 @@ describe("ApplicationDates", () => {
     render(
       <FormProviderWrapper>
         <ApplicationDates
-          jurisdiction="JurisdictionA"
           enableMarketingStatus={true}
           enableMarketingStatusMonths={true}
           listing={{} as unknown as FormListing}
@@ -157,7 +155,6 @@ describe("ApplicationDates", () => {
     render(
       <FormProviderWrapper>
         <ApplicationDates
-          jurisdiction="JurisdictionA"
           enableMarketingStatus={false}
           enableMarketingStatusMonths={true}
           listing={{} as unknown as FormListing}
@@ -170,5 +167,32 @@ describe("ApplicationDates", () => {
       </FormProviderWrapper>
     )
     expect(screen.queryByText("Marketing status")).not.toBeInTheDocument()
+  })
+
+  it("should show scheduled listing publish date when feature flag is on", () => {
+    render(
+      <FormProviderWrapper>
+        <ApplicationDates
+          enableAutopublish={true}
+          listing={{} as unknown as FormListing}
+          requiredFields={[]}
+          openHouseEvents={[]}
+          setOpenHouseEvents={() => {
+            return
+          }}
+        />
+      </FormProviderWrapper>
+    )
+    expect(
+      screen.getByRole("group", { name: "Scheduled listing publish date" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Listing will automatically go live on this date between 12:00 AM and 2:00 AM"
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Listing will automatically close on this date and time")
+    ).toBeInTheDocument()
   })
 })

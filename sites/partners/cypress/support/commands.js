@@ -418,7 +418,7 @@ Cypress.Commands.add("addMinimalListing", (listingName, isLottery, isApproval, j
     cy.getByID("developer").type(listing["developer"])
     cy.getByID("add-photos-button").contains("Add photo").click()
     cy.getByTestId("dropzone-input").attachFile(
-      "cypress-automated-image-upload-071e2ab9-5a52-4f34-85f0-e41f696f4b96.jpeg",
+      "cypress-automated-image-upload-071e2ab9-5a52-4f34-85f0-e41f696f4b96.jpg",
       {
         subjectType: "drag-n-drop",
       }
@@ -436,7 +436,7 @@ Cypress.Commands.add("addMinimalListing", (listingName, isLottery, isApproval, j
     cy.getByID("addUnitsButton").contains("Add unit").click()
     cy.getByID("number").type(listing["number"])
     cy.getByID("unitTypes.id").select(listing["unitType.id"])
-    cy.getByID("unitFormSaveAndExitButton").contains("Save & exit").click()
+    cy.getByID("unitFormSaveAndExitButton").contains("Save & exit").should("be.visible").click()
     cy.getByID("amiChart.id").select(1).trigger("change")
     cy.getByID("amiPercentage").select(1)
     cy.getByID("unitFormSaveAndExitButton").contains("Save & exit").click()

@@ -29,7 +29,6 @@ import {
 } from "@bloom-housing/ui-components"
 import {
   cloudinaryPdfFromId,
-  getOccupancyDescription,
   imageUrlFromListing,
   occupancyTable,
   getTimeRangeString,
@@ -172,7 +171,6 @@ export const ListingView = (props: ListingProps) => {
     )
   } // else condition is handled inline below
 
-  const occupancyDescription = getOccupancyDescription(listing)
   const occupancyHeaders = {
     unitType: "t.unitType",
     occupancy: "t.occupancy",
@@ -225,14 +223,18 @@ export const ListingView = (props: ListingProps) => {
     } else {
       multiselectQuestionSet = listingPreferences
     }
-    return multiselectQuestionSet.map((listingMultiselectQuestion, index) => {
-      return {
-        ordinal: index + 1,
-        links: listingMultiselectQuestion?.multiselectQuestions?.links,
-        title: listingMultiselectQuestion?.multiselectQuestions?.text,
-        description: listingMultiselectQuestion?.multiselectQuestions?.description,
-      }
-    })
+    return multiselectQuestionSet
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((listingMultiselectQuestion, index) => {
+        return {
+          ordinal: listingMultiselectQuestion.ordinal || index + 1,
+          links: listingMultiselectQuestion?.multiselectQuestions?.links,
+          title:
+            listingMultiselectQuestion?.multiselectQuestions?.name ||
+            listingMultiselectQuestion?.multiselectQuestions?.text,
+          description: listingMultiselectQuestion?.multiselectQuestions?.description,
+        }
+      })
   }
 
   if (listingPrograms && listingPrograms?.length > 0) {
@@ -790,7 +792,10 @@ export const ListingView = (props: ListingProps) => {
               />
             </ListSection>
 
-            <ListSection title={t("t.occupancy")} subtitle={occupancyDescription}>
+            <ListSection
+              title={t("t.occupancy")}
+              subtitle={t("listings.occupancyDescriptionNoSro")}
+            >
               <StandardTable
                 headers={occupancyHeaders}
                 data={occupancyData}

@@ -7,13 +7,20 @@ import tz from "dayjs/plugin/timezone"
 import { AuthContext, MessageContext } from "@bloom-housing/shared-helpers"
 import { t } from "@bloom-housing/ui-components"
 import {
+  AgencyFilterParams,
   ApplicationOrderByKeys,
+  EnumAgencyFilterParamsComparison,
   EnumListingFilterParamsComparison,
   EnumMultiselectQuestionFilterParamsComparison,
+  EnumPropertyFilterParamsComparison,
   ListingViews,
   MultiselectQuestionFilterParams,
+  MultiselectQuestionOrderByKeys,
   MultiselectQuestionsApplicationSectionEnum,
+  MultiselectQuestionsStatusEnum,
   OrderByEnum,
+  UserFilterParams,
+  UserOrderByKeys,
   UserRole,
 } from "@bloom-housing/shared-helpers/src/types/backend-swagger"
 
@@ -42,6 +49,9 @@ interface UseSingleFlaggedApplicationDataProps extends UseSingleApplicationDataP
 
 type UseUserListProps = PaginationProps & {
   search?: string
+  filter?: UserFilterParams
+  orderBy?: UserOrderByKeys[]
+  orderDir?: OrderByEnum[]
 }
 
 type UseListingsDataProps = PaginationProps & {
@@ -51,6 +61,11 @@ type UseListingsDataProps = PaginationProps & {
   roles?: UserRole
   userJurisidctionIds?: string[]
   view?: ListingViews
+}
+
+type UsePropertiesListProps = PaginationProps & {
+  search?: string
+  jurisdictions?: string
 }
 
 export function useSingleListingData(listingId: string) {
@@ -126,7 +141,7 @@ export function useListingsData({
   }
 }
 
-export const useListingExport = () => {
+export const useListingExport = (useSecurePathway = false) => {
   const { listingsService } = useContext(AuthContext)
   const { addToast } = useContext(MessageContext)
 
@@ -136,12 +151,21 @@ export const useListingExport = () => {
     setCsvExportLoading(true)
 
     try {
-      const content = await listingsService.listAsCsv(
-        { timeZone: dayjs.tz.guess() },
-        { responseType: "arraybuffer" }
-      )
-      const blob = new Blob([new Uint8Array(content)], { type: "application/zip" })
-      const url = window.URL.createObjectURL(blob)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let content: any
+      let url: string
+
+      if (useSecurePathway) {
+        content = await listingsService.listAsCsvSecure({ timeZone: dayjs.tz.guess() })
+        url = content
+      } else {
+        content = await listingsService.listAsCsv(
+          { timeZone: dayjs.tz.guess() },
+          { responseType: "arraybuffer" }
+        )
+        const blob = new Blob([new Uint8Array(content)], { type: "application/zip" })
+        url = window.URL.createObjectURL(blob)
+      }
       const link = document.createElement("a")
       link.href = url
       const now = new Date()
@@ -153,7 +177,12 @@ export const useListingExport = () => {
       addToast(t("t.exportSuccess"), { variant: "success" })
     } catch (err) {
       console.log(err)
-      addToast(t("account.settings.alerts.genericError"), { variant: "alert" })
+      addToast(
+        t("account.settings.alerts.genericError", { contactEmail: t("resources.contactEmail") }),
+        {
+          variant: "alert",
+        }
+      )
     }
 
     setCsvExportLoading(false)
@@ -342,19 +371,6 @@ export function useSingleAmiChart(amiChartId: string) {
   }
 }
 
-export function useUnitPriorityList() {
-  const { unitPriorityService } = useContext(AuthContext)
-  const fetcher = () => unitPriorityService.list()
-
-  const { data, error } = useSWR(`/api/adapter/unitAccessibilityPriorityTypes`, fetcher)
-
-  return {
-    data,
-    loading: !error && !data,
-    error,
-  }
-}
-
 export function useUnitTypeList() {
   const { unitTypesService } = useContext(AuthContext)
   const fetcher = () => unitTypesService.list()
@@ -399,25 +415,76 @@ export function useMultiselectQuestionList() {
   }
 }
 
+interface MSQTableSettings {
+  sort?: ColumnOrder[]
+  search?: string
+  page?: number
+  limit?: number
+}
+
 export function useJurisdictionalMultiselectQuestionList(
   jurisdictionId: string,
-  applicationSection?: MultiselectQuestionsApplicationSectionEnum
+  applicationSection?: MultiselectQuestionsApplicationSectionEnum,
+  statuses?: MultiselectQuestionsStatusEnum[],
+  tableSettings?: MSQTableSettings
 ) {
   const { multiselectQuestionsService } = useContext(AuthContext)
 
   const params: {
     filter: MultiselectQuestionFilterParams[]
+    orderBy: MultiselectQuestionOrderByKeys[]
+    orderDir: OrderByEnum[]
+    search?: string
+    limit?: number | "all"
+    page?: number
   } = {
     filter: [],
+    orderBy: [],
+    orderDir: [],
+    search: undefined,
+    limit: "all",
+    page: undefined,
   }
   params.filter.push({
     $comparison: EnumMultiselectQuestionFilterParamsComparison["IN"],
     jurisdiction: jurisdictionId && jurisdictionId !== "" ? jurisdictionId : undefined,
   })
+  tableSettings?.sort?.forEach((sortItem) => {
+    switch (sortItem.orderBy) {
+      case "name":
+        params.orderBy.push(MultiselectQuestionOrderByKeys.name)
+        break
+      case "status":
+        params.orderBy.push(MultiselectQuestionOrderByKeys.status)
+        break
+      case "jurisdiction":
+        params.orderBy.push(MultiselectQuestionOrderByKeys.jurisdiction)
+        break
+      case "updatedAt":
+        params.orderBy.push(MultiselectQuestionOrderByKeys.updatedAt)
+        break
+    }
+    params.orderDir.push(sortItem.orderDir as OrderByEnum)
+  })
+  if (tableSettings?.search) {
+    params.search = tableSettings.search
+  }
+  if (tableSettings?.limit) {
+    params.limit = tableSettings.limit
+  }
+  if (tableSettings?.page) {
+    params.page = tableSettings.page
+  }
   if (applicationSection) {
     params.filter.push({
       $comparison: EnumMultiselectQuestionFilterParamsComparison["="],
       applicationSection,
+    })
+  }
+  if (statuses) {
+    params.filter.push({
+      $comparison: EnumMultiselectQuestionFilterParamsComparison["IN"],
+      status: statuses.join(",") as MultiselectQuestionsStatusEnum,
     })
   }
 
@@ -446,7 +513,7 @@ export function useListingsMultiselectQuestionList(multiselectQuestionId: string
     })
 
   const { data, error } = useSWR(
-    `/api/adapter/muliselectQuestions/listings/${multiselectQuestionId}`,
+    `/api/adapter/multiselectQuestions/listings/${multiselectQuestionId}`,
     fetcher
   )
 
@@ -470,16 +537,20 @@ export function useReservedCommunityTypeList() {
   }
 }
 
-export function useUserList({ page, limit, search = "" }: UseUserListProps) {
+export function useUserList({
+  page,
+  limit,
+  filter = { isPortalUser: true },
+  orderBy = [],
+  orderDir = [],
+  search = "",
+}: UseUserListProps) {
   const params = {
     page,
     limit,
-    filter: [
-      {
-        isPortalUser: true,
-        $comparison: EnumListingFilterParamsComparison["="],
-      },
-    ],
+    filter: [filter],
+    orderBy,
+    orderDir,
     search,
   }
 
@@ -588,7 +659,12 @@ export const useZipExport = (
       addToast(t("t.exportSuccess"), { variant: "success" })
     } catch (err) {
       console.log(err)
-      addToast(t("account.settings.alerts.genericError"), { variant: "alert" })
+      addToast(
+        t("account.settings.alerts.genericError", { contactEmail: t("resources.contactEmail") }),
+        {
+          variant: "alert",
+        }
+      )
     }
     setExportLoading(false)
   }, [])
@@ -605,6 +681,15 @@ export const useUsersExport = () => {
   return useCsvExport(
     () => userService.listAsCsv(),
     `users-${createDateStringFromNow("YYYY-MM-DD_HH:mm")}.csv`
+  )
+}
+
+export const useAdvocateUserExport = () => {
+  const { userService } = useContext(AuthContext)
+
+  return useCsvExport(
+    () => userService.listAdvocatesAsCsv(),
+    `advocate-users-${createDateStringFromNow("YYYY-MM-DD_HH:mm")}.csv`
   )
 }
 
@@ -629,7 +714,12 @@ const useCsvExport = (
       addToast(t("t.exportSuccess"), { variant: "success" })
     } catch (err) {
       console.log(err)
-      addToast(t("account.settings.alerts.genericError"), { variant: "alert" })
+      addToast(
+        t("account.settings.alerts.genericError", { contactEmail: t("resources.contactEmail") }),
+        {
+          variant: "alert",
+        }
+      )
     }
 
     setCsvExportLoading(false)
@@ -694,4 +784,84 @@ export function useWatchOnFormNumberFieldsChange(
     return () => clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fieldToTriggerWatch.join(","), fieldValuesToWatch.join(","), trigger])
+}
+
+type UseAgenciesListProps = PaginationProps & {
+  search?: string
+  jurisdictions?: string
+}
+
+export function useAgenciesList({ page, limit, search, jurisdictions }: UseAgenciesListProps) {
+  const filter: AgencyFilterParams[] = []
+  const params = {
+    page,
+    limit,
+    search,
+    filter,
+  }
+
+  if (search?.length < 3) {
+    delete params.search
+  } else {
+    Object.assign(params, { search })
+  }
+
+  params.filter.push({
+    $comparison: EnumAgencyFilterParamsComparison.IN,
+    jurisdiction: jurisdictions && jurisdictions !== "" ? jurisdictions : undefined,
+  })
+
+  const paramsString = qs.stringify(params)
+
+  const { agencyService } = useContext(AuthContext)
+
+  const fetcher = () => agencyService.list(params)
+
+  const cacheKey = `/api/adapter/agency?${paramsString}`
+
+  const { data, error } = useSWR(cacheKey, fetcher)
+
+  return {
+    cacheKey,
+    data,
+    loading: !error && !data,
+    error,
+  }
+}
+
+export function usePropertiesList({ page, limit, search, jurisdictions }: UsePropertiesListProps) {
+  const params = {
+    page,
+    limit,
+    search,
+    filter: [],
+  }
+
+  if (search?.length < 3) {
+    delete params.search
+  } else {
+    Object.assign(params, { search })
+  }
+
+  params.filter.push({
+    $comparison: EnumPropertyFilterParamsComparison.IN,
+    jurisdiction: jurisdictions && jurisdictions !== "" ? jurisdictions : undefined,
+  })
+
+  const paramsString = qs.stringify(params)
+
+  const { propertiesService } = useContext(AuthContext)
+
+  const fetcher = () => propertiesService.list(params)
+
+  const cacheKey = `/api/adapter/properties?${paramsString}`
+
+  const { data, error } = useSWR(cacheKey, fetcher)
+
+  return {
+    cacheKey,
+    data,
+    loading: !error && !data,
+    error,
+  }
 }

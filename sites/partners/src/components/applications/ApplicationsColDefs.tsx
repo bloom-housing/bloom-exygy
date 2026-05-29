@@ -6,6 +6,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat"
 import {
   Application,
   IncomePeriodEnum,
+  ReviewOrderTypeEnum,
 } from "@bloom-housing/shared-helpers/src/types/backend-swagger"
 dayjs.extend(customParseFormat)
 
@@ -42,7 +43,9 @@ export function getColDefs(
   maxHouseholdSize: number,
   enableFullTimeStudentQuestion?: boolean,
   disableWorkInRegion?: boolean,
-  enableApplicationStatus?: boolean
+  enableApplicationStatus?: boolean,
+  reviewOrderType?: ReviewOrderTypeEnum,
+  enableHousingAdvocate?: boolean
 ): ColDef[] {
   const defs: ColDef[] = [
     {
@@ -99,6 +102,34 @@ export function getColDefs(
               return t(`application.details.applicationStatus.${data.status}`)
             },
           },
+          {
+            headerName: t("application.details.accessibleUnitWaitlistNumber"),
+            field: "accessibleUnitWaitlistNumber",
+            sortable: false,
+            filter: false,
+            width: 120,
+            minWidth: 50,
+          },
+          {
+            headerName: t("application.details.conventionalUnitWaitlistNumber"),
+            field: "conventionalUnitWaitlistNumber",
+            sortable: false,
+            filter: false,
+            width: 120,
+            minWidth: 50,
+          },
+          ...(reviewOrderType === ReviewOrderTypeEnum.lottery
+            ? [
+                {
+                  headerName: t("application.details.manualLotteryPositionNumber"),
+                  field: "manualLotteryPositionNumber",
+                  sortable: false,
+                  filter: false,
+                  width: 120,
+                  minWidth: 50,
+                },
+              ]
+            : []),
         ]
       : []),
     {
@@ -221,7 +252,7 @@ export function getColDefs(
       width: 180,
       minWidth: 50,
       valueGetter: (row) => {
-        if (!row?.data?.preferences) return ""
+        if (!row?.data?.preferences || !Array.isArray(row.data.preferences)) return ""
 
         const { preferences } = row.data
 
@@ -476,6 +507,10 @@ export function getColDefs(
       minWidth: 50,
       valueFormatter: ({ data, value }: { data: Application; value: string }) => {
         if (!value) return ""
+
+        if (value === "caseManager" && enableHousingAdvocate) {
+          return t("application.alternateContact.type.options.caseManagerAdvocate")
+        }
 
         return value == "other"
           ? data.alternateContact.otherType

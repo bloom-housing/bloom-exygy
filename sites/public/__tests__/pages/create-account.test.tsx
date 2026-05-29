@@ -1,10 +1,22 @@
-import { fireEvent, mockNextRouter, render, waitFor, screen } from "../testUtils"
-import { user } from "@bloom-housing/shared-helpers/__tests__/testHelpers"
 import React from "react"
-import CreateAccount from "../../src/pages/create-account"
-import userEvent from "@testing-library/user-event"
 import { setupServer } from "msw/lib/node"
 import { rest } from "msw"
+import userEvent from "@testing-library/user-event"
+import { addTranslation } from "@bloom-housing/ui-components"
+import { user } from "@bloom-housing/shared-helpers/__tests__/testHelpers"
+import CreateAccount from "../../src/pages/create-account"
+import { fireEvent, mockNextRouter, render, waitFor, screen } from "../testUtils"
+
+jest.mock("@bloom-housing/shared-helpers", () => {
+  const actual = jest.requireActual("@bloom-housing/shared-helpers")
+  return {
+    ...actual,
+    tIfExists: jest.fn(actual.tIfExists),
+  }
+})
+
+const { tIfExists } = require("@bloom-housing/shared-helpers")
+const actual = jest.requireActual("@bloom-housing/shared-helpers")
 
 const server = setupServer()
 
@@ -18,11 +30,41 @@ afterEach(() => {
   server.resetHandlers()
   window.localStorage.clear()
   window.sessionStorage.clear()
+  tIfExists.mockReset()
+  tIfExists.mockImplementation(actual.tIfExists)
 })
 
 afterAll(() => server.close())
 
 describe("Create Account Page", () => {
+  describe("initial disclaimer", () => {
+    it("renders the disclaimer when tIfExists returns a value", () => {
+      tIfExists.mockReturnValue("present")
+
+      addTranslation({
+        "account.create.initialDisclaimer":
+          "If you are experiencing homelessness, please select <a href='https://www.exygy.com' target='_blank'>this link</a>.",
+      })
+
+      render(<CreateAccount />)
+
+      expect(screen.getByText(/experiencing homelessness/i)).toBeInTheDocument()
+      expect(screen.getByRole("link", { name: /this link/i })).toHaveAttribute(
+        "href",
+        "https://www.exygy.com"
+      )
+    })
+
+    it("does not render the disclaimer when tIfExists returns null", () => {
+      tIfExists.mockReturnValue(null)
+
+      render(<CreateAccount />)
+
+      expect(screen.queryByText(/experiencing homelessness/i)).not.toBeInTheDocument()
+      expect(screen.queryByRole("link", { name: /this link/i })).not.toBeInTheDocument()
+    })
+  })
+
   it("should render the page with all fields, buttons and links", () => {
     render(<CreateAccount />)
 
@@ -50,7 +92,7 @@ describe("Create Account Page", () => {
     ).toBeInTheDocument()
     expect(screen.getByText("For example: 01 19 2000", { selector: "p" })).toBeInTheDocument()
 
-    verifyInitialInput(screen.getByRole("textbox", { name: /your email address/i }))
+    verifyInitialInput(screen.getByRole("textbox", { name: /email/i }))
 
     const passwordInput = screen.getByLabelText(/^password/i, { selector: "input" })
     verifyInitialInput(passwordInput)
@@ -114,7 +156,7 @@ describe("Create Account Page", () => {
         screen.getByText("Please enter a valid date of birth, must be 18 or older")
       ).toBeInTheDocument()
 
-      expect(screen.getByRole("textbox", { name: /your email address/i })).toBeInvalid()
+      expect(screen.getByRole("textbox", { name: /email/i })).toBeInvalid()
       expect(screen.getByText("Please enter a valid email address")).toBeInTheDocument()
 
       expect(screen.getByLabelText(/^password/i, { selector: "input" })).toBeInvalid()
@@ -368,7 +410,7 @@ describe("Create Account Page", () => {
       jest.spyOn(console, "error").mockImplementation()
       const { message, value, status } = response
       server.use(
-        rest.post("http://localhost/api/adapter/user", (_req, res, ctx) => {
+        rest.post("http://localhost/api/adapter/user/public", (_req, res, ctx) => {
           if (message) {
             return res(
               ctx.status(status),
@@ -391,10 +433,7 @@ describe("Create Account Page", () => {
       await userEvent.type(screen.getByRole("textbox", { name: /month/i }), "2")
       await userEvent.type(screen.getByRole("textbox", { name: /day/i }), "4")
       await userEvent.type(screen.getByRole("textbox", { name: /year/i }), "2000")
-      await userEvent.type(
-        screen.getByRole("textbox", { name: /your email address/i }),
-        "johndoe@example.com"
-      )
+      await userEvent.type(screen.getByRole("textbox", { name: /email/i }), "johndoe@example.com")
       await userEvent.type(
         screen.getByLabelText(/^password/i, { selector: "input" }),
         "P@ssw0rd#123"
@@ -418,7 +457,7 @@ describe("Create Account Page", () => {
     process.env.showPwdless = "TRUE"
     const { pushMock } = mockNextRouter()
     server.use(
-      rest.post("http://localhost/api/adapter/user", (_req, res, ctx) => {
+      rest.post("http://localhost/api/adapter/user/public", (_req, res, ctx) => {
         return res(ctx.json(user))
       })
     )
@@ -432,10 +471,7 @@ describe("Create Account Page", () => {
     await userEvent.type(screen.getByRole("textbox", { name: /month/i }), "2")
     await userEvent.type(screen.getByRole("textbox", { name: /day/i }), "4")
     await userEvent.type(screen.getByRole("textbox", { name: /year/i }), "2000")
-    await userEvent.type(
-      screen.getByRole("textbox", { name: /your email address/i }),
-      "johndoe@example.com"
-    )
+    await userEvent.type(screen.getByRole("textbox", { name: /email/i }), "johndoe@example.com")
     await userEvent.type(screen.getByLabelText(/^password/i, { selector: "input" }), "P@ssw0rd#123")
     await userEvent.type(
       screen.getByLabelText(/re-enter your password/i, {

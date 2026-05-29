@@ -1,4 +1,8 @@
-import { HouseholdMemberRelationship, AlternateContactRelationship } from "../types/backend-swagger"
+import {
+  HouseholdMemberRelationship,
+  AlternateContactRelationship,
+  ListingFeatures,
+} from "../types/backend-swagger"
 
 export const stateKeys = [
   "",
@@ -70,7 +74,7 @@ export const contactPreferencesKeys = [
   },
 ]
 
-export const adaFeatureKeys = ["mobility", "vision", "hearing", "other"]
+export const adaFeatureKeys = ["mobility", "vision", "hearing", "hearingAndVision", "other"]
 
 export const relationshipKeys = ["", ...Object.values(HouseholdMemberRelationship)]
 
@@ -78,40 +82,15 @@ export const altContactRelationshipKeys = Object.values(AlternateContactRelation
 
 export const ethnicityKeys = ["hispanicLatino", "notHispanicLatino"]
 
-export const rootRaceKeys = [
-  "americanIndianAlaskanNative",
-  "asian",
-  "blackAfricanAmerican",
-  "nativeHawaiianOtherPacificIslander",
-  "white",
-  "otherMultiracial",
-  "declineToRespond",
-]
-
-export const asianKeys = [
-  "asianIndian",
-  "chinese",
-  "filipino",
-  "japanese",
-  "korean",
-  "vietnamese",
-  "otherAsian",
-]
-
-export const nativeHawaiianOtherPacificIslanderKeys = [
-  "nativeHawaiian",
-  "guamanianOrChamorro",
-  "samoan",
-  "otherPacificIslander",
-]
-
 export const genderKeys = [
-  "female",
-  "male",
   "genderqueerGenderNon-Binary",
-  "transFemale",
   "transMale",
-  "notListed",
+  "transFemale",
+  "male",
+  "female",
+  "differentTerm",
+  "dontKnow",
+  "preferNoResponse",
 ]
 
 export const sexualOrientation = [
@@ -124,10 +103,6 @@ export const sexualOrientation = [
 
 export const prependRoot = (root: string, subKeys: string[]) => {
   return subKeys.map((key) => `${root}-${key}`)
-}
-
-interface subCheckboxes {
-  [key: string]: string[]
 }
 
 // Transform an object with keys that may be prepended with a string to an array of only the values with the string
@@ -160,19 +135,6 @@ export const fieldGroupObjectToArray = (
       }
     })
   return modifiedArray
-}
-
-export const raceKeys: subCheckboxes = {
-  americanIndianAlaskanNative: [],
-  asian: prependRoot("asian", asianKeys),
-  blackAfricanAmerican: [],
-  nativeHawaiianOtherPacificIslander: prependRoot(
-    "nativeHawaiianOtherPacificIslander",
-    nativeHawaiianOtherPacificIslanderKeys
-  ),
-  white: [],
-  otherMultiracial: [],
-  declineToRespond: [],
 }
 
 export const isKeyIncluded = (
@@ -254,27 +216,57 @@ export const bedroomKeys = [
   "fiveBdrm",
 ]
 
-export const listingFeatures = [
-  "wheelchairRamp",
-  "elevator",
-  "serviceAnimalsAllowed",
+export type ListingFeaturesValues = keyof Omit<ListingFeatures, "id" | "createdAt" | "updatedAt">
+
+export const allListingFeatures: ListingFeaturesValues[] = [
+  "accessibleHeightToilet",
   "accessibleParking",
-  "parkingOnSite",
-  "inUnitWasherDryer",
-  "laundryInBuilding",
-  "barrierFreeEntrance",
-  "rollInShower",
-  "grabBars",
-  "heatingInUnit",
   "acInUnit",
-  "hearing",
-  "mobility",
-  "visual",
-  "barrierFreeUnitEntrance",
-  "loweredLightSwitch",
   "barrierFreeBathroom",
-  "wideDoorways",
+  "barrierFreeEntrance",
+  "barrierFreePropertyEntrance",
+  "barrierFreeUnitEntrance",
+  "bathGrabBarsOrReinforcements",
+  "bathroomCounterLowered",
+  "brailleSignageInBuilding",
+  "carbonMonoxideDetectorWithStrobe",
+  "carpetInUnit",
+  "elevator",
+  "extraAudibleCarbonMonoxideDetector",
+  "extraAudibleSmokeDetector",
+  "fireSuppressionSprinklerSystem",
+  "frontControlsDishwasher",
+  "frontControlsStoveCookTop",
+  "grabBars",
+  "hardFlooringInUnit",
+  "hearing",
+  "hearingAndVision",
+  "heatingInUnit",
+  "inUnitWasherDryer",
+  "kitchenCounterLowered",
+  "laundryInBuilding",
+  "leverHandlesOnDoors",
+  "leverHandlesOnFaucets",
   "loweredCabinets",
+  "loweredLightSwitch",
+  "mobility",
+  "noEntryStairs",
+  "nonDigitalKitchenAppliances",
+  "noStairsToParkingSpots",
+  "noStairsWithinUnit",
+  "parkingOnSite",
+  "refrigeratorWithBottomDoorFreezer",
+  "rollInShower",
+  "serviceAnimalsAllowed",
+  "smokeDetectorWithStrobe",
+  "streetLevelEntrance",
+  "toiletGrabBarsOrReinforcements",
+  "ttyAmplifiedPhone",
+  "turningCircleInBathrooms",
+  "visual",
+  "walkInShower",
+  "wheelchairRamp",
+  "wideDoorways",
 ]
 
 export const listingRequiredDocumentsOptions = [
@@ -308,3 +300,5 @@ export const listingUtilities = [
   "phone",
   "internet",
 ]
+
+export const listingParkingTypes = ["onStreet", "offStreet", "garage", "carport"]

@@ -18,10 +18,21 @@ export const HomeResources = (props: HomeResourcesProps) => {
     FeatureFlagEnum.enableAdditionalResources
   )
 
+  const enableResources = isFeatureFlagOn(props.jurisdiction, FeatureFlagEnum.enableResources)
+
+  const enableCustomListingNotifications = isFeatureFlagOn(
+    props.jurisdiction,
+    FeatureFlagEnum.enableCustomListingNotifications
+  )
+
+  const showNotificationsCard =
+    enableCustomListingNotifications ||
+    (props.jurisdiction && props.jurisdiction.notificationsSignUpUrl)
+
   return (
     <Grid spacing="lg">
       <Grid.Row columns={enableAdditionalResources ? 3 : 2}>
-        {props.jurisdiction && props.jurisdiction.notificationsSignUpUrl && (
+        {showNotificationsCard && (
           <Grid.Cell>
             <BloomCard
               iconSymbol={"envelope"}
@@ -29,12 +40,16 @@ export const HomeResources = (props: HomeResourcesProps) => {
               variant={"block"}
               headingPriority={3}
               className={styles["resource"]}
-              iconClass={styles["resource-icon"]}
+              iconClass={"card-icon"}
             >
               <Card.Section>
                 <Button
                   key={"sign-up"}
-                  href={props.jurisdiction.notificationsSignUpUrl}
+                  href={
+                    enableCustomListingNotifications
+                      ? "/account/notifications"
+                      : props.jurisdiction.notificationsSignUpUrl
+                  }
                   variant="primary-outlined"
                   size={"sm"}
                 >
@@ -44,27 +59,29 @@ export const HomeResources = (props: HomeResourcesProps) => {
             </BloomCard>
           </Grid.Cell>
         )}
-        <Grid.Cell>
-          <BloomCard
-            iconSymbol="house"
-            title={t("welcome.seeMoreOpportunitiesTruncated")}
-            variant={"block"}
-            headingPriority={3}
-            className={styles["resource"]}
-            iconClass={styles["resource-icon"]}
-          >
-            <Card.Section>
-              <Button
-                key={"additional-resources"}
-                href="/additional-resources"
-                variant="primary-outlined"
-                size={"sm"}
-              >
-                {t("welcome.viewAdditionalHousingTruncated")}
-              </Button>
-            </Card.Section>
-          </BloomCard>
-        </Grid.Cell>
+        {enableResources && (
+          <Grid.Cell>
+            <BloomCard
+              iconSymbol="house"
+              title={t("welcome.seeMoreOpportunitiesTruncated")}
+              variant={"block"}
+              headingPriority={3}
+              className={styles["resource"]}
+              iconClass={"card-icon"}
+            >
+              <Card.Section>
+                <Button
+                  key={"additional-resources"}
+                  href="/additional-resources"
+                  variant="primary-outlined"
+                  size={"sm"}
+                >
+                  {t("welcome.viewAdditionalHousingTruncated")}
+                </Button>
+              </Card.Section>
+            </BloomCard>
+          </Grid.Cell>
+        )}
         {enableAdditionalResources && (
           <Grid.Cell>
             <BloomCard

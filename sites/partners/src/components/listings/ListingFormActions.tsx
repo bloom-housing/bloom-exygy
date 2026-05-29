@@ -1,12 +1,16 @@
-import React, { useContext, useMemo } from "react"
+import React, { useCallback, useContext, useMemo, useState } from "react"
 import { useRouter } from "next/router"
 import dayjs from "dayjs"
 import LinkIcon from "@heroicons/react/20/solid/LinkIcon"
 import PencilSquareIcon from "@heroicons/react/24/solid/PencilSquareIcon"
 import { t } from "@bloom-housing/ui-components"
 import { Button, Link, Grid, Icon } from "@bloom-housing/ui-seeds"
+import utc from "dayjs/plugin/utc"
+dayjs.extend(utc)
+import AdminListingApprovalDialog from "./PaperListingForm/dialogs/AdminListingApprovalDialog"
 import { pdfUrlFromListingEvents, AuthContext, MessageContext } from "@bloom-housing/shared-helpers"
 import {
+  FeatureFlagEnum,
   ListingEventsTypeEnum,
   ListingUpdate,
   ListingsStatusEnum,
@@ -49,6 +53,7 @@ const ListingFormActions = ({
   const { profile, listingsService, doJurisdictionsHaveFeatureFlagOn } = useContext(AuthContext)
   const { addToast } = useContext(MessageContext)
   const router = useRouter()
+  const [adminApproveDialogOpen, setAdminApproveDialogOpen] = useState(false)
   const isSameEditingUser = profile?.id === listing?.lastUpdatedByUser?.id
   const showLastUpdatedByUser =
     !!listing?.lastUpdatedByUser?.name && type !== ListingFormActionsType.add
@@ -83,10 +88,24 @@ const ListingFormActions = ({
   const listingJurisdiction = profile?.jurisdictions?.find(
     (jurisdiction) => jurisdiction.id === listing?.jurisdictions?.id
   )
+
   const hideCloseButton = doJurisdictionsHaveFeatureFlagOn(
-    "hideCloseListingButton",
+    FeatureFlagEnum.hideCloseListingButton,
     listingJurisdiction?.id
   )
+  const isPartnerPublicListingRestrictionEnabled = doJurisdictionsHaveFeatureFlagOn(
+    FeatureFlagEnum.disablePartnerPublicListingEdits,
+    listingJurisdiction?.id
+  )
+  const enableAutopublish = doJurisdictionsHaveFeatureFlagOn(
+    FeatureFlagEnum.enableAutopublish,
+    listingJurisdiction?.id
+  )
+
+  const isEditPublicListingRestricted =
+    !!profile?.userRoles?.isPartner &&
+    isPartnerPublicListingRestrictionEnabled &&
+    (listing?.status === ListingsStatusEnum.active || listing?.status === ListingsStatusEnum.closed)
 
   const recordUpdated = useMemo(() => {
     if (!listing) return null
@@ -95,6 +114,61 @@ const ListingFormActions = ({
 
     return dayjsDate.format("MMMM DD, YYYY, hh:mm A")
   }, [listing])
+
+  const getApprovedStatus = useCallback((): ListingsStatusEnum => {
+    const hasValidScheduledAt =
+      listing?.scheduledPublishAt != null && dayjs.utc(listing.scheduledPublishAt).isValid()
+
+    if (!hasValidScheduledAt) return ListingsStatusEnum.active
+
+    const scheduledAtDate = dayjs.utc(listing.scheduledPublishAt).format("MM/DD/YYYY")
+    if (dayjs().startOf("day").isBefore(dayjs(scheduledAtDate).startOf("day"))) {
+      return ListingsStatusEnum.scheduled
+    }
+
+    return ListingsStatusEnum.active
+  }, [listing?.scheduledPublishAt])
+
+  const approveAndSetStatus = useCallback(
+    async (status: ListingsStatusEnum = ListingsStatusEnum.active) => {
+      try {
+        const result = await listingsService.update({
+          id: listing.id,
+          body: {
+            ...(listing as unknown as ListingUpdate),
+            // account for type mismatch between ListingMultiSelectQuestionType and IdDto
+            listingMultiselectQuestions: listing.listingMultiselectQuestions?.map(
+              (multiselectQuestions) => ({
+                ordinal: multiselectQuestions.ordinal,
+                id: multiselectQuestions.multiselectQuestions?.id,
+              })
+            ),
+            status,
+          },
+        })
+        if (result) {
+          addToast(
+            status === ListingsStatusEnum.scheduled
+              ? t("listings.approval.listingScheduled")
+              : t("listings.approval.listingPublished"),
+            { variant: "success" }
+          )
+          await router.push(`/`)
+        }
+      } catch (err) {
+        if (err.response?.status === 400) {
+          setErrorAlert?.(t("errors.alert.listingPublishError"))
+        }
+        addToast(
+          err.response?.data?.message === "email failed"
+            ? t("errors.alert.listingsApprovalEmailError")
+            : t("errors.somethingWentWrong"),
+          { variant: "warn" }
+        )
+      }
+    },
+    [addToast, listing, listingsService, router, setErrorAlert]
+  )
 
   const actions = useMemo(() => {
     const cancelButton = (
@@ -282,7 +356,6 @@ const ListingFormActions = ({
         </Button>
       </Grid.Cell>
     )
-
     const approveAndPublishButton = (
       <Grid.Cell key="btn-approve-and-publish">
         <Button
@@ -291,47 +364,16 @@ const ListingFormActions = ({
           variant="success"
           className="w-full"
           onClick={async () => {
-            // utilize same submit logic if updating status from edit view
-            if (type === ListingFormActionsType.edit) {
-              submitFormWithStatus("redirect", ListingsStatusEnum.active)
-            } else {
-              try {
-                const result = await listingsService.update({
-                  id: listing.id,
-                  body: {
-                    ...(listing as unknown as ListingUpdate),
-                    // account for type mismatch between ListingMultiSelectQuestionType and IdDto
-                    listingMultiselectQuestions: listing.listingMultiselectQuestions?.map(
-                      (multiselectQuestions) => ({
-                        ordinal: multiselectQuestions.ordinal,
-                        id: multiselectQuestions.multiselectQuestions?.id,
-                      })
-                    ),
-                    status: ListingsStatusEnum.active,
-                  },
-                })
-                if (result) {
-                  addToast(t("listings.approval.listingPublished"), { variant: "success" })
-                  await router.push(`/`)
-                }
-              } catch (err) {
-                // if it is a bad request (is missing fields or incorrect data) then display an error banner
-                if (err.response?.status === 400) {
-                  setErrorAlert(
-                    "There are errors in this listing that must be resolved before publishing. To see the errors, please try to approve this listing from the edit view."
-                  )
-                }
-                addToast(
-                  err.response?.data?.message === "email failed"
-                    ? t("errors.alert.listingsApprovalEmailError")
-                    : t("errors.somethingWentWrong"),
-                  { variant: "warn" }
-                )
-              }
+            if (enableAutopublish) {
+              setAdminApproveDialogOpen(true)
+              return
             }
+            await approveAndSetStatus()
           }}
         >
-          {t("listings.approval.approveAndPublish")}
+          {enableAutopublish
+            ? t("listings.approval.approve")
+            : t("listings.approval.approveAndPublish")}
         </Button>
       </Grid.Cell>
     )
@@ -407,7 +449,7 @@ const ListingFormActions = ({
     }
     //draft listing, detail view
     else if (
-      listing.status === ListingsStatusEnum.pending &&
+      listing?.status === ListingsStatusEnum.pending &&
       type === ListingFormActionsType.details
     ) {
       elements.push(editFromDetailButton)
@@ -416,7 +458,7 @@ const ListingFormActions = ({
     }
     //draft listing, edit view
     else if (
-      listing.status === ListingsStatusEnum.pending &&
+      listing?.status === ListingsStatusEnum.pending &&
       type === ListingFormActionsType.edit
     ) {
       elements.push(isListingApprover || !isListingApprovalEnabled ? publishButton : submitButton)
@@ -443,7 +485,6 @@ const ListingFormActions = ({
       type === ListingFormActionsType.edit
     ) {
       if (isListingApprover && !profile?.userRoles.isPartner) {
-        elements.push(approveAndPublishButton)
         elements.push(requestChangesButton)
       } else if (profile?.userRoles.isSupportAdmin) {
         elements.push(requestChangesButton)
@@ -469,7 +510,9 @@ const ListingFormActions = ({
       listing.status === ListingsStatusEnum.changesRequested &&
       type === ListingFormActionsType.edit
     ) {
-      elements.push(isListingApprover ? approveAndPublishButton : submitButton)
+      if (!isListingApprover) {
+        elements.push(submitButton)
+      }
       elements.push(saveContinueButton)
       elements.push(cancelButton)
     }
@@ -478,7 +521,9 @@ const ListingFormActions = ({
       listing.status === ListingsStatusEnum.active &&
       type === ListingFormActionsType.details
     ) {
-      elements.push(editFromDetailButton)
+      if (!isEditPublicListingRestricted) {
+        elements.push(editFromDetailButton)
+      }
       if (isListingCopier) elements.push(copyButton)
       elements.push(previewButton)
     }
@@ -499,8 +544,12 @@ const ListingFormActions = ({
       listing.status === ListingsStatusEnum.closed &&
       type === ListingFormActionsType.details
     ) {
-      if (profile?.userRoles.isAdmin || !process.env.limitClosedListingActions)
+      if (
+        (profile?.userRoles.isAdmin || !process.env.limitClosedListingActions) &&
+        !isEditPublicListingRestricted
+      ) {
         elements.push(editFromDetailButton)
+      }
       if (isListingCopier) elements.push(copyButton)
       elements.push(previewButton)
       viewlotteryResultsButton()
@@ -522,19 +571,18 @@ const ListingFormActions = ({
 
     return elements
   }, [
-    addToast,
+    enableAutopublish,
     hideCloseButton,
     isListingApprovalEnabled,
     isListingApprover,
     isListingCopier,
+    isEditPublicListingRestricted,
     listing,
     listingId,
     listingJurisdiction?.publicUrl,
-    listingsService,
-    profile?.userRoles.isAdmin,
-    profile?.userRoles.isPartner,
-    router,
-    setErrorAlert,
+    approveAndSetStatus,
+    profile,
+    setAdminApproveDialogOpen,
     showCloseListingModal,
     showCopyListingDialog,
     showLotteryResultsDrawer,
@@ -561,6 +609,17 @@ const ListingFormActions = ({
           <p>{recordUpdated}</p>
         </div>
       </StatusAside>
+      {enableAutopublish && (
+        <AdminListingApprovalDialog
+          isOpen={adminApproveDialogOpen}
+          onClose={() => setAdminApproveDialogOpen(false)}
+          onConfirm={async () => {
+            setAdminApproveDialogOpen(false)
+            await approveAndSetStatus(getApprovedStatus())
+          }}
+          scheduledPublishAt={listing?.scheduledPublishAt}
+        />
+      )}
     </>
   )
 }

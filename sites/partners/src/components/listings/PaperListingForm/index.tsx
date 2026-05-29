@@ -3,8 +3,8 @@ import { useRouter } from "next/router"
 import dayjs from "dayjs"
 import { CharacterCount as CharacterCountExtension } from "@tiptap/extension-character-count"
 import { useEditor } from "@tiptap/react"
-import { t, Form, AlertBox, LoadingOverlay } from "@bloom-housing/ui-components"
-import { Button, Icon, Tabs } from "@bloom-housing/ui-seeds"
+import { t, Form, AlertBox } from "@bloom-housing/ui-components"
+import { Button, Icon, LoadingState, Tabs } from "@bloom-housing/ui-seeds"
 import ChevronLeftIcon from "@heroicons/react/20/solid/ChevronLeftIcon"
 import ChevronRightIcon from "@heroicons/react/20/solid/ChevronRightIcon"
 import {
@@ -14,12 +14,12 @@ import {
   listingSectionQuestions,
 } from "@bloom-housing/shared-helpers"
 import {
+  EnumListingListingType,
   FeatureFlagEnum,
   Jurisdiction,
   Listing,
   ListingCreate,
   ListingEventsTypeEnum,
-  ListingTypeEnum,
   ListingUpdate,
   ListingsStatusEnum,
   MarketingTypeEnum,
@@ -38,15 +38,18 @@ import {
 } from "../../../lib/listings/formTypes"
 import ListingDataPipeline from "../../../lib/listings/ListingDataPipeline"
 import { StatusBar } from "../../../components/shared/StatusBar"
+import { usePropertiesList } from "../../../lib/hooks"
 import { EditorExtensions } from "../../shared/TextEditor"
 import ListingFormActions, { ListingFormActionsType } from "../ListingFormActions"
 import { cleanRichText, getReadableErrorMessage } from "../PaperListingDetails/sections/helpers"
+import { createDate } from "../../../lib/helpers"
 import { getListingStatusTag } from "../helpers"
 import AdditionalDetails from "./sections/AdditionalDetails"
 import AdditionalEligibility from "./sections/AdditionalEligibility"
 import LeasingAgent from "./sections/LeasingAgent"
 import AdditionalFees from "./sections/AdditionalFees"
 import Units from "./sections/Units"
+import AccessibilityFeatures from "./sections/AccessibilityFeatures"
 import BuildingDetails from "./sections/BuildingDetails"
 import ListingIntro from "./sections/ListingIntro"
 import ListingPhotos from "./sections/ListingPhotos"
@@ -68,8 +71,8 @@ import PublishListingDialog from "./dialogs/PublishListingDialog"
 import LiveConfirmationDialog from "./dialogs/LiveConfirmationDialog"
 import ListingApprovalDialog from "./dialogs/ListingApprovalDialog"
 import SaveBeforeExitDialog from "./dialogs/SaveBeforeExitDialog"
-
 import * as styles from "./ListingForm.module.scss"
+
 const CHARACTER_LIMIT = 1000
 
 type ListingFormProps = {
@@ -96,6 +99,7 @@ const getToast = (
     [ListingsStatusEnum.pendingReview]: t("listings.approval.submittedForReview"),
     [ListingsStatusEnum.changesRequested]: t("listings.listingStatus.changesRequested"),
     [ListingsStatusEnum.active]: t("listings.approval.listingPublished"),
+    [ListingsStatusEnum.scheduled]: t("listings.approval.listingScheduled"),
     [ListingsStatusEnum.pending]: t("listings.approval.listingUnpublished"),
     [ListingsStatusEnum.closed]: t("listings.approval.listingClosed"),
     saved: t("listings.progressSaved"),
@@ -136,6 +140,8 @@ const ListingForm = ({
   const { getValues, setError, clearErrors, reset, watch, setValue } = formMethods
 
   const marketingTypeChoice = watch("marketingType")
+  const scheduledListingPublishDateField = watch("scheduledListingPublishDateField")
+  const scheduledPublishAtFromForm = createDate(scheduledListingPublishDateField, true)
 
   const { listingsService, profile, doJurisdictionsHaveFeatureFlagOn } = useContext(AuthContext)
 
@@ -163,6 +169,8 @@ const ListingForm = ({
       return { ...listingProg?.multiselectQuestions }
     })
   )
+
+  const [accessibilityFeatures, setAccessibilityFeatures] = useState<string[]>(null)
 
   const [latLong, setLatLong] = useState<LatitudeLongitude>({
     latitude: listing?.listingsBuildingAddress?.latitude ?? null,
@@ -199,6 +207,12 @@ const ListingForm = ({
     content:
       listing?.whatToExpectAdditionalText || selectedJurisdictionData?.whatToExpectAdditionalText,
     immediatelyRender: true,
+  })
+
+  const { data: properties, loading: propertiesLoading } = usePropertiesList({
+    page: null,
+    limit: "all",
+    jurisdictions: jurisdictionId,
   })
 
   useEffect(() => {
@@ -262,11 +276,33 @@ const ListingForm = ({
     jurisdictionId
   )
 
+  const enableV2MSQ = doJurisdictionsHaveFeatureFlagOn(FeatureFlagEnum.enableV2MSQ, jurisdictionId)
+
+  const enableAutopublish = doJurisdictionsHaveFeatureFlagOn(
+    FeatureFlagEnum.enableAutopublish,
+    jurisdictionId
+  )
+
   useEffect(() => {
-    if (enableNonRegulatedListings && isNonRegulated) {
-      setValue("listingType", ListingTypeEnum.nonRegulated)
+    if (enableNonRegulatedListings && !listing?.listingType) {
+      setValue(
+        "listingType",
+        isNonRegulated ? EnumListingListingType.nonRegulated : EnumListingListingType.regulated
+      )
     }
-  }, [enableNonRegulatedListings, isNonRegulated, setValue])
+  }, [enableNonRegulatedListings, isNonRegulated, listing?.listingType, setValue])
+
+  useEffect(() => {
+    if (listing && listing.listingFeatures && accessibilityFeatures === null) {
+      setAccessibilityFeatures(
+        Object.keys(listing.listingFeatures)
+          .map((feature) => {
+            return listing.listingFeatures[feature] === true ? feature : null
+          })
+          .filter((feature) => feature !== null)
+      )
+    }
+  }, [listing, accessibilityFeatures])
 
   useEffect(() => {
     if (listing?.units) {
@@ -370,6 +406,30 @@ const ListingForm = ({
             formData.listingType = undefined
           }
 
+          if (
+            doJurisdictionsHaveFeatureFlagOn(
+              FeatureFlagEnum.enableAccessibilityFeatures,
+              jurisdictionId
+            )
+          ) {
+            if (formData.configurableAccessibilityFeatures) {
+              setAccessibilityFeatures(
+                Object.values(formData.configurableAccessibilityFeatures).flat() as string[]
+              )
+            }
+
+            if (!formData.configurableAccessibilityFeatures) {
+              formData.configurableAccessibilityFeatures = accessibilityFeatures
+            }
+          } else {
+            delete formData.configurableAccessibilityFeatures
+          }
+
+          if (!enableAutopublish) {
+            delete formData.scheduledListingPublishDateField
+            formData.scheduledPublishAt = null
+          }
+
           if (successful) {
             const dataPipeline = new ListingDataPipeline(formData, {
               preferences: disableListingPreferences ? [] : preferences,
@@ -433,7 +493,11 @@ const ListingForm = ({
               const fieldName = errorMessage.split(" ")[0]
               const readableError = getReadableErrorMessage(errorMessage)
               if (readableError) {
-                setError(fieldName, { message: readableError })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                setError(fieldName as any, { message: readableError })
+                if (fieldName === "scheduledPublishAt") {
+                  setError("scheduledListingPublishDateField", { message: readableError })
+                }
                 if (fieldName === "buildingAddress" || fieldName === "buildingAddress.nested") {
                   const setIfEmpty = (
                     fieldName: string,
@@ -441,7 +505,8 @@ const ListingForm = ({
                     errorMessage: string
                   ) => {
                     if (!fieldValue) {
-                      setError(fieldName, { message: errorMessage })
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      setError(fieldName as any, { message: errorMessage })
                     }
                   }
                   const address = formData.listingsBuildingAddress
@@ -480,16 +545,17 @@ const ListingForm = ({
       profile,
       addToast,
       enableUnitGroups,
+      enableAutopublish,
     ]
   )
-  return loading === true ? null : (
-    <>
-      <LoadingOverlay isLoading={loading}>
+  return (
+    <div className={"loading-state-wrapper"}>
+      <LoadingState loading={loading || propertiesLoading}>
         <>
           <StatusBar>{getListingStatusTag(listing?.status)}</StatusBar>
 
           <FormProvider {...formMethods}>
-            <section className={`bg-primary-lighter py-5 ${styles["form-overrides"]}`}>
+            <section className={`py-5 ${styles["form-overrides"]}`}>
               <div className="max-w-screen-xl px-5 mx-auto">
                 {alert && (
                   <AlertBox className="mb-5" onClose={() => setAlert(null)} closeable type="alert">
@@ -532,13 +598,29 @@ const ListingForm = ({
                               FeatureFlagEnum.enableListingFileNumber,
                               jurisdictionId
                             )}
+                            enableProperties={doJurisdictionsHaveFeatureFlagOn(
+                              FeatureFlagEnum.enableProperties,
+                              jurisdictionId
+                            )}
                             jurisdictionName={
                               profile?.jurisdictions?.length > 1
                                 ? selectedJurisdictionData?.name
                                 : null
                             }
+                            jurisdictionId={
+                              profile?.jurisdictions?.length > 1
+                                ? selectedJurisdictionData?.id
+                                : null
+                            }
                             listingId={listing?.id}
+                            listingType={
+                              listing?.listingType ||
+                              (isNonRegulated &&
+                                enableNonRegulatedListings &&
+                                EnumListingListingType.nonRegulated)
+                            }
                             requiredFields={requiredFields}
+                            properties={properties?.items}
                           />
                           <ListingPhotos
                             enableListingImageAltText={enableListingImageAltText}
@@ -548,17 +630,26 @@ const ListingForm = ({
                           <BuildingDetails
                             customMapPositionChosen={customMapPositionChosen}
                             requiredFields={requiredFields}
+                            enableConfigurableRegions={doJurisdictionsHaveFeatureFlagOn(
+                              FeatureFlagEnum.enableConfigurableRegions,
+                              jurisdictionId
+                            )}
                             enableNonRegulatedListings={enableNonRegulatedListings}
                             enableRegions={doJurisdictionsHaveFeatureFlagOn(
                               FeatureFlagEnum.enableRegions,
                               jurisdictionId
                             )}
+                            regions={selectedJurisdictionData?.regions}
                             latLong={latLong}
                             listing={listing}
                             setCustomMapPositionChosen={setCustomMapPositionChosen}
                             setLatLong={setLatitudeLongitude}
                           />
                           <CommunityType
+                            disableReservedCommunityTypeEdit={doJurisdictionsHaveFeatureFlagOn(
+                              FeatureFlagEnum.disableReservedCommunityTypeEdit,
+                              jurisdictionId
+                            )}
                             listing={listing}
                             swapCommunityTypeWithPrograms={swapCommunityTypeWithPrograms}
                             requiredFields={requiredFields}
@@ -581,6 +672,7 @@ const ListingForm = ({
                             setPreferences={setPreferences}
                             setPrograms={setPrograms}
                             swapCommunityTypeWithPrograms={swapCommunityTypeWithPrograms}
+                            enableV2MSQ={enableV2MSQ}
                           />
                           <AdditionalFees
                             enableCreditScreeningFee={doJurisdictionsHaveFeatureFlagOn(
@@ -595,12 +687,18 @@ const ListingForm = ({
                             existingUtilities={listing?.listingUtilities}
                             requiredFields={requiredFields}
                           />
-                          <BuildingFeatures
-                            existingFeatures={listing?.listingFeatures}
+                          <AccessibilityFeatures
+                            existingFeatures={accessibilityFeatures}
                             enableAccessibilityFeatures={doJurisdictionsHaveFeatureFlagOn(
                               FeatureFlagEnum.enableAccessibilityFeatures,
                               jurisdictionId
                             )}
+                            setAccessibilityFeatures={setAccessibilityFeatures}
+                            listingFeaturesConfiguration={
+                              selectedJurisdictionData?.listingFeaturesConfiguration
+                            }
+                          />
+                          <BuildingFeatures
                             enableSmokingPolicyRadio={doJurisdictionsHaveFeatureFlagOn(
                               FeatureFlagEnum.enableSmokingPolicyRadio,
                               jurisdictionId
@@ -609,6 +707,15 @@ const ListingForm = ({
                               FeatureFlagEnum.enableParkingFee,
                               jurisdictionId
                             )}
+                            enablePetPolicyCheckbox={doJurisdictionsHaveFeatureFlagOn(
+                              FeatureFlagEnum.enablePetPolicyCheckbox,
+                              jurisdictionId
+                            )}
+                            enableParkingType={doJurisdictionsHaveFeatureFlagOn(
+                              FeatureFlagEnum.enableParkingType,
+                              jurisdictionId
+                            )}
+                            existingParkingTypes={listing?.parkType}
                             requiredFields={requiredFields}
                           />
                           <NeighborhoodAmenities
@@ -634,6 +741,7 @@ const ListingForm = ({
                             jurisdictionId
                           ) && <BuildingSelectionCriteria />}
                           <AdditionalDetails
+                            enableNonRegulatedListings={enableNonRegulatedListings}
                             existingDocuments={listing?.requiredDocumentsList}
                             requiredFields={requiredFields}
                           />
@@ -698,9 +806,14 @@ const ListingForm = ({
                               FeatureFlagEnum.disableCommonApplication,
                               jurisdictionId
                             )}
+                            enableReferralQuestionUnits={doJurisdictionsHaveFeatureFlagOn(
+                              FeatureFlagEnum.enableReferralQuestionUnits,
+                              jurisdictionId
+                            )}
                             jurisdiction={jurisdictionId}
                             listing={listing}
                             requiredFields={requiredFields}
+                            defaultReferralText={selectedJurisdictionData?.referralSummaryDefault}
                           />
                           <ApplicationAddress requiredFields={requiredFields} listing={listing} />
                           <ApplicationDates
@@ -716,6 +829,7 @@ const ListingForm = ({
                               FeatureFlagEnum.enableMarketingStatusMonths,
                               jurisdictionId
                             )}
+                            enableAutopublish={enableAutopublish}
                             listing={listing}
                             openHouseEvents={openHouseEvents}
                             requiredFields={requiredFields}
@@ -770,7 +884,7 @@ const ListingForm = ({
             </section>
           </FormProvider>
         </>
-      </LoadingOverlay>
+      </LoadingState>
 
       <SaveBeforeExitDialog
         isOpen={closeSaveDialog}
@@ -802,6 +916,8 @@ const ListingForm = ({
         isOpen={submitForApprovalDialog}
         setOpen={setSubmitForApprovalDialog}
         submitFormWithStatus={triggerSubmitWithStatus}
+        enableAutopublish={enableAutopublish}
+        scheduledPublishAt={scheduledPublishAtFromForm}
       />
 
       <RequestChangesDialog
@@ -810,7 +926,7 @@ const ListingForm = ({
         setModalIsOpen={setRequestChangesDialog}
         submitFormWithStatus={triggerSubmitWithStatus}
       />
-    </>
+    </div>
   )
 }
 

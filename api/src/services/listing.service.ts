@@ -15,14 +15,19 @@ import {
   ListingEventsTypeEnum,
   ListingsStatusEnum,
   MarketingTypeEnum,
+  MultiselectQuestionsStatusEnum,
   Prisma,
   ReviewOrderTypeEnum,
   UserRoleEnum,
 } from '@prisma/client';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import tz from 'dayjs/plugin/timezone';
 import { firstValueFrom } from 'rxjs';
 import { ApplicationFlaggedSetService } from './application-flagged-set.service';
+import { CronJobService } from './cron-job.service';
 import { EmailService } from './email.service';
+import { MultiselectQuestionService } from './multiselect-question.service';
 import { PermissionService } from './permission.service';
 import { PrismaService } from './prisma.service';
 import { TranslationService } from './translation.service';
@@ -56,11 +61,16 @@ import {
 import {
   summarizeUnitsByTypeAndRent,
   summarizeUnits,
+  summarizeByPriorityType,
 } from '../utilities/unit-utilities';
 import { fillModelStringFields } from '../utilities/model-fields';
 import { doJurisdictionHaveFeatureFlagSet } from '../utilities/feature-flag-utilities';
 import { addUnitGroupsSummarized } from '../utilities/unit-groups-transformations';
-import { CronJobService } from './cron-job.service';
+import { ListingMultiselectQuestion } from '../dtos/listings/listing-multiselect-question.dto';
+import { SnapshotCreateService } from './snapshot-create.service';
+
+dayjs.extend(utc);
+dayjs.extend(tz);
 
 export type getListingsArgs = {
   skip: number;
@@ -74,6 +84,7 @@ export const selectViews: Partial<Record<ListingViews, Prisma.ListingsSelect>> =
     name: {
       name: true,
       id: true,
+      property: true,
       jurisdictions: {
         select: {
           id: true,
@@ -100,6 +111,25 @@ selectViews.address = {
   },
 };
 
+selectViews.map = {
+  ...selectViews.name,
+  listingsBuildingAddress: true,
+  listingImages: {
+    include: {
+      assets: true,
+    },
+  },
+  reservedCommunityTypes: true,
+  units: {
+    select: {
+      monthlyRent: true,
+      unitTypes: {
+        select: { numBedrooms: true, name: true },
+      },
+    },
+  },
+};
+
 export const includeViews: Partial<
   Record<ListingViews, Prisma.ListingsInclude>
 > = {
@@ -118,6 +148,9 @@ includeViews.base = {
     },
   },
   listingMultiselectQuestions: {
+    orderBy: {
+      ordinal: 'asc',
+    },
     include: {
       multiselectQuestions: true,
     },
@@ -172,14 +205,31 @@ includeViews.full = {
   listingsApplicationPickUpAddress: true,
   listingsApplicationDropOffAddress: true,
   listingsApplicationMailingAddress: true,
+  listingMultiselectQuestions: {
+    orderBy: {
+      ordinal: 'asc',
+    },
+    include: {
+      multiselectQuestions: {
+        include: {
+          multiselectOptions: {
+            orderBy: {
+              ordinal: 'asc',
+            },
+          },
+        },
+      },
+    },
+  },
   requestedChangesUser: true,
+  property: true,
   requiredDocumentsList: true,
+  parkType: true,
   units: {
     include: {
       unitAmiChartOverrides: true,
       unitTypes: true,
       unitRentTypes: true,
-      unitAccessibilityPriorityTypes: true,
       amiChart: {
         include: {
           jurisdictions: true,
@@ -198,16 +248,18 @@ const LISTING_CRON_JOB_NAME = 'LISTING_CRON_JOB';
 @Injectable()
 export class ListingService implements OnModuleInit {
   constructor(
-    private prisma: PrismaService,
-    private translationService: TranslationService,
-    private httpService: HttpService,
     private afsService: ApplicationFlaggedSetService,
-    private emailService: EmailService,
     private configService: ConfigService,
+    private cronJobService: CronJobService,
+    private emailService: EmailService,
+    private httpService: HttpService,
     @Inject(Logger)
     private logger = new Logger(ListingService.name),
+    private multiselectQuestionService: MultiselectQuestionService,
     private permissionService: PermissionService,
-    private cronJobService: CronJobService,
+    private prisma: PrismaService,
+    private translationService: TranslationService,
+    private snapshotCreateService: SnapshotCreateService,
   ) {}
 
   onModuleInit() {
@@ -233,37 +285,54 @@ export class ListingService implements OnModuleInit {
       totalPages: number;
     };
   }> {
-    const whereClause = this.buildWhereClause(params.filter, params.search);
+    const queryParams: ListingsQueryBody | ListingsQueryParams = {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 10,
+      ...params,
+    };
+    const whereClause = this.buildWhereClause(
+      queryParams.filter,
+      queryParams.search,
+    );
+
     const count = await this.prisma.listings.count({
       where: whereClause,
     });
 
     // if passed in page and limit would result in no results because there aren't that many listings
     // revert back to the first page
-    let page = params.page;
-    if (count && params.limit && params.limit !== 'all' && params.page > 1) {
-      if (Math.ceil(count / params.limit) < params.page) {
+    let page = queryParams.page;
+    if (
+      count &&
+      queryParams.limit &&
+      queryParams.limit !== 'all' &&
+      queryParams.page > 1
+    ) {
+      if (Math.ceil(count / queryParams.limit) < queryParams.page) {
         page = 1;
       }
     }
 
     const query = {
-      skip: calculateSkip(params.limit, page),
-      take: calculateTake(params.limit),
-      orderBy: buildOrderByForListings(params.orderBy, params.orderDir),
+      skip: calculateSkip(queryParams.limit, page),
+      take: calculateTake(queryParams.limit),
+      orderBy: buildOrderByForListings(
+        queryParams.orderBy,
+        queryParams.orderDir,
+      ),
       where: whereClause,
     };
-    const hasSelectView = selectViews[params.view];
+    const hasSelectView = selectViews[queryParams.view];
 
     // Prisma only allows either select or include so two separate
     const listingsRaw = hasSelectView
       ? await this.prisma.listings.findMany({
           ...query,
-          select: selectViews[params.view],
+          select: selectViews[queryParams.view],
         })
       : await this.prisma.listings.findMany({
           ...query,
-          include: includeViews[params.view ?? 'full'],
+          include: includeViews[queryParams.view ?? 'full'],
         });
 
     const listings = mapTo(Listing, listingsRaw);
@@ -275,6 +344,7 @@ export class ListingService implements OnModuleInit {
             listing.units,
             listing,
           ),
+          priorityTypes: summarizeByPriorityType(listing),
         };
       }
     });
@@ -282,7 +352,7 @@ export class ListingService implements OnModuleInit {
     addUnitGroupsSummarized(listings);
 
     const paginationInfo = buildPaginationMetaInfo(
-      params,
+      queryParams,
       count,
       listings.length,
     );
@@ -407,7 +477,7 @@ export class ListingService implements OnModuleInit {
           params.listingInfo.id,
           params.jurisId,
         );
-        const jurisdiction = await this.prisma.jurisdictions.findFirst({
+        const jurisdiction = await this.prisma.jurisdictions.findUnique({
           select: {
             publicUrl: true,
           },
@@ -417,7 +487,7 @@ export class ListingService implements OnModuleInit {
           { id: params.jurisId },
           { id: params.listingInfo.id, name: params.listingInfo.name },
           userInfo.emails,
-          jurisdiction?.publicUrl || '',
+          jurisdiction.publicUrl || '',
         );
       }
     }
@@ -531,21 +601,39 @@ export class ListingService implements OnModuleInit {
                   key: ListingFilterKeys.availabilities,
                   caseSensitive: true,
                 });
-                return {
-                  AND: builtFilter
-                    .map((filt) => ({
-                      unitGroups: {
-                        some: {
-                          [FilterAvailabilityEnum.openWaitlist]: filt,
+                return [
+                  {
+                    AND: builtFilter
+                      .map((filt) => ({
+                        unitGroups: {
+                          some: {
+                            [FilterAvailabilityEnum.openWaitlist]: filt,
+                          },
+                        },
+                      }))
+                      .concat(
+                        notUnderConstruction.map((filt) => ({
+                          marketingType: filt,
+                        })),
+                      ),
+                  },
+                  {
+                    AND: [
+                      { unitGroups: { none: {} } },
+                      {
+                        reviewOrderType: {
+                          in: [
+                            ReviewOrderTypeEnum.waitlist,
+                            ReviewOrderTypeEnum.waitlistLottery,
+                          ],
                         },
                       },
-                    }))
-                    .concat(
-                      notUnderConstruction.map((filt) => ({
+                      ...notUnderConstruction.map((filt) => ({
                         marketingType: filt,
                       })),
-                    ),
-                };
+                    ],
+                  },
+                ];
               } else if (availability === FilterAvailabilityEnum.waitlistOpen) {
                 const builtFilter = buildFilter({
                   $comparison: Compare.IN,
@@ -659,6 +747,22 @@ export class ListingService implements OnModuleInit {
                       marketingType: filt,
                     })),
                   ),
+              },
+              {
+                AND: [
+                  { unitGroups: { none: {} } },
+                  {
+                    reviewOrderType: {
+                      in: [
+                        ReviewOrderTypeEnum.waitlist,
+                        ReviewOrderTypeEnum.waitlistLottery,
+                      ],
+                    },
+                  },
+                  ...notUnderConstruction.map((filt) => ({
+                    marketingType: filt,
+                  })),
+                ],
               },
             ],
           });
@@ -830,6 +934,18 @@ export class ListingService implements OnModuleInit {
             })),
           });
         }
+        if (filter[ListingFilterKeys.parkingType]) {
+          if (Array.isArray(filter[ListingFilterKeys.parkingType])) {
+            const parkingTypes = filter[ListingFilterKeys.parkingType];
+            filters.push({
+              OR: parkingTypes.map((type) => ({
+                parkType: {
+                  [type]: true,
+                },
+              })),
+            });
+          }
+        }
         if (filter[ListingFilterKeys.ids]) {
           const builtFilter = buildFilter({
             $comparison: filter.$comparison,
@@ -897,6 +1013,15 @@ export class ListingService implements OnModuleInit {
                 [feature]: true,
               },
             })),
+          });
+        }
+        if (filter[ListingFilterKeys.accessibilityPriorityTypes]) {
+          const types = filter[ListingFilterKeys.accessibilityPriorityTypes];
+          filters.push({
+            OR: types.flatMap((type) => [
+              { units: { some: { accessibilityPriorityType: type } } },
+              { unitGroups: { some: { accessibilityPriorityType: type } } },
+            ]),
           });
         }
         if (filter[ListingFilterKeys.monthlyRent]) {
@@ -989,6 +1114,20 @@ export class ListingService implements OnModuleInit {
             })),
           });
         }
+        if (filter[ListingFilterKeys.configurableRegions]) {
+          const builtFilter = buildFilter({
+            $comparison: filter.$comparison,
+            $include_nulls: false,
+            value: filter[ListingFilterKeys.configurableRegions],
+            key: ListingFilterKeys.configurableRegions,
+            caseSensitive: true,
+          });
+          filters.push({
+            OR: builtFilter.map((filt) => ({
+              configurableRegion: filt,
+            })),
+          });
+        }
         if (filter[ListingFilterKeys.reservedCommunityTypes]) {
           const builtFilter = buildFilter({
             $comparison: filter.$comparison,
@@ -1066,10 +1205,20 @@ export class ListingService implements OnModuleInit {
 
     if (search) {
       filters.push({
-        name: {
-          contains: search,
-          mode: Prisma.QueryMode.insensitive,
-        },
+        OR: [
+          {
+            name: {
+              contains: search,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          },
+          {
+            listingFileNumber: {
+              contains: search,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          },
+        ],
       });
     }
 
@@ -1165,6 +1314,9 @@ export class ListingService implements OnModuleInit {
     if (listing.listingUtilities) {
       listing.utilities = listing.listingUtilities;
     }
+    if (listing.parkingType) {
+      listing.parkingType = listing.parkingType;
+    }
     if (listing.listingFeatures) {
       listing.features = listing.listingFeatures;
     }
@@ -1209,9 +1361,6 @@ export class ListingService implements OnModuleInit {
         if (unit.unitRentTypes) {
           unit.unitRentType = unit.unitRentTypes;
         }
-        if (unit.unitAccessibilityPriorityTypes) {
-          unit.priorityType = unit.unitAccessibilityPriorityTypes;
-        }
         if (unit.unitAmiChartOverrides) {
           unit.amiChartOverride = unit.unitAmiChartOverrides;
         }
@@ -1244,7 +1393,7 @@ export class ListingService implements OnModuleInit {
       }
     }
     // add additional jurisdiction fields for external purpose
-    const jurisdiction = await this.prisma.jurisdictions.findFirst({
+    const jurisdiction = await this.prisma.jurisdictions.findUnique({
       where: { id: listing.jurisdictions.id },
     });
     return JSON.stringify({ ...listing, jurisdiction: jurisdiction });
@@ -1266,19 +1415,43 @@ export class ListingService implements OnModuleInit {
         jurisdictionId: dto.jurisdictions.id,
       },
     );
-    const rawJurisdiction = await this.prisma.jurisdictions.findFirst({
+
+    const rawJurisdiction = await this.prisma.jurisdictions.findUnique({
+      select: {
+        id: true,
+        featureFlags: true,
+        listingApprovalPermissions: true,
+      },
       where: {
         id: dto.jurisdictions.id,
-      },
-      include: {
-        featureFlags: true,
       },
     });
 
     const enableUnitGroups = doJurisdictionHaveFeatureFlagSet(
-      rawJurisdiction as Jurisdiction,
+      rawJurisdiction as unknown as Jurisdiction,
       FeatureFlagEnum.enableUnitGroups,
     );
+
+    const enableV2MSQ = doJurisdictionHaveFeatureFlagSet(
+      rawJurisdiction as unknown as Jurisdiction,
+      FeatureFlagEnum.enableV2MSQ,
+    );
+
+    const enableAutopublish = doJurisdictionHaveFeatureFlagSet(
+      rawJurisdiction as unknown as Jurisdiction,
+      FeatureFlagEnum.enableAutopublish,
+    );
+
+    if (!enableAutopublish) {
+      dto.scheduledPublishAt = null;
+    }
+
+    if (enableAutopublish && dto.scheduledPublishAt) {
+      dto.scheduledPublishAt = this.normalizeScheduledPublishAt(
+        dto.scheduledPublishAt,
+      );
+      this.checkScheduledPublishAtIsInFuture(dto.scheduledPublishAt);
+    }
 
     if (
       (enableUnitGroups && dto.units?.length > 0) ||
@@ -1292,6 +1465,13 @@ export class ListingService implements OnModuleInit {
       });
     }
 
+    if (enableV2MSQ) {
+      const multiselectQuestionIds = dto.listingMultiselectQuestions.map(
+        (multiselectQuestion) => multiselectQuestion.id,
+      );
+      await this.validateMultiselectQuestions(multiselectQuestionIds);
+    }
+
     dto.unitsAvailable = this.calculateUnitsAvailable(
       dto.reviewOrderType,
       dto.units,
@@ -1299,8 +1479,15 @@ export class ListingService implements OnModuleInit {
     );
 
     // Remove requiredFields and minimumImagesRequired properties before saving to database
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { requiredFields, minimumImagesRequired, ...listingData } = dto;
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      requiredFields,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      minimumImagesRequired,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      listingFeaturesConfiguration,
+      ...listingData
+    } = dto;
 
     const rawListing = await this.prisma.listings.create({
       include: includeViews.full,
@@ -1432,6 +1619,13 @@ export class ListingService implements OnModuleInit {
               },
             }
           : undefined,
+        parkType: dto.parkType
+          ? {
+              create: {
+                ...dto.parkType,
+              },
+            }
+          : undefined,
         listingsApplicationMailingAddress: dto.listingsApplicationMailingAddress
           ? {
               create: {
@@ -1491,6 +1685,7 @@ export class ListingService implements OnModuleInit {
                 sqFeet: unit.sqFeet,
                 monthlyRentAsPercentOfIncome: unit.monthlyRentAsPercentOfIncome,
                 bmrProgramChart: unit.bmrProgramChart,
+                accessibilityPriorityType: unit.accessibilityPriorityType,
                 unitTypes: unit.unitTypes
                   ? {
                       connect: {
@@ -1512,14 +1707,6 @@ export class ListingService implements OnModuleInit {
                       },
                     }
                   : undefined,
-                unitAccessibilityPriorityTypes:
-                  unit.unitAccessibilityPriorityTypes
-                    ? {
-                        connect: {
-                          id: unit.unitAccessibilityPriorityTypes.id,
-                        },
-                      }
-                    : undefined,
                 unitRentTypes: unit.unitRentTypes
                   ? {
                       connect: {
@@ -1548,6 +1735,7 @@ export class ListingService implements OnModuleInit {
                 monthlyRent: group.monthlyRent,
                 totalAvailable: group.totalAvailable,
                 totalCount: group.totalCount,
+                accessibilityPriorityType: group.accessibilityPriorityType,
                 unitGroupAmiLevels: {
                   create: group.unitGroupAmiLevels?.map((level) => ({
                     amiPercentage: level.amiPercentage,
@@ -1562,14 +1750,6 @@ export class ListingService implements OnModuleInit {
                       : undefined,
                   })),
                 },
-                unitAccessibilityPriorityTypes:
-                  group.unitAccessibilityPriorityTypes
-                    ? {
-                        connect: {
-                          id: group.unitAccessibilityPriorityTypes.id,
-                        },
-                      }
-                    : undefined,
                 unitTypes: {
                   connect: group.unitTypes.map((type) => ({
                     id: type.id,
@@ -1582,6 +1762,8 @@ export class ListingService implements OnModuleInit {
           ? {
               create: dto.unitsSummary.map((unitSummary) => ({
                 ...unitSummary,
+                accessibilityPriorityType:
+                  unitSummary.accessibilityPriorityType,
                 unitTypes: unitSummary.unitTypes
                   ? {
                       connect: {
@@ -1589,14 +1771,6 @@ export class ListingService implements OnModuleInit {
                       },
                     }
                   : undefined,
-                unitAccessibilityPriorityTypes:
-                  unitSummary.unitAccessibilityPriorityTypes
-                    ? {
-                        connect: {
-                          id: unitSummary.unitAccessibilityPriorityTypes.id,
-                        },
-                      }
-                    : undefined,
               })),
             }
           : undefined,
@@ -1643,22 +1817,29 @@ export class ListingService implements OnModuleInit {
           : undefined,
       },
     });
-    if (rawListing.status === ListingsStatusEnum.pendingReview) {
-      const jurisdiction = await this.prisma.jurisdictions.findFirst({
-        where: {
-          id: rawListing.jurisdictions?.id,
-        },
-      });
+    const mappedListing = mapTo(Listing, rawListing);
+
+    if (mappedListing.status === ListingsStatusEnum.pendingReview) {
       await this.listingApprovalNotify({
         user: requestingUser,
-        listingInfo: { id: rawListing.id, name: rawListing.name },
-        status: rawListing.status,
-        approvingRoles: jurisdiction?.listingApprovalPermissions,
-        jurisId: rawListing.jurisdictions.id,
+        listingInfo: { id: mappedListing.id, name: mappedListing.name },
+        status: mappedListing.status,
+        approvingRoles: rawJurisdiction.listingApprovalPermissions,
+        jurisId: rawJurisdiction.id,
       });
+    } else if (
+      enableV2MSQ &&
+      mappedListing.status === ListingsStatusEnum.active
+    ) {
+      const multiselectQuestions =
+        mappedListing.listingMultiselectQuestions.map(
+          (listingMultiselectQuestion) =>
+            listingMultiselectQuestion.multiselectQuestions,
+        );
+      void this.multiselectQuestionService.activateMany(multiselectQuestions);
     }
-    await this.cachePurge(undefined, dto.status, rawListing.id);
-    return mapTo(Listing, rawListing);
+    await this.cachePurge(undefined, dto.status, mappedListing.id);
+    return mappedListing;
   }
 
   async duplicate(
@@ -1727,6 +1908,20 @@ export class ListingService implements OnModuleInit {
       throw new ForbiddenException();
     }
 
+    const rawJurisdiction = await this.prisma.jurisdictions.findUnique({
+      where: {
+        id: storedListing.jurisdictions.id,
+      },
+      include: {
+        featureFlags: true,
+      },
+    });
+
+    const enableV2MSQ = doJurisdictionHaveFeatureFlagSet(
+      rawJurisdiction as unknown as Jurisdiction,
+      FeatureFlagEnum.enableV2MSQ,
+    );
+
     const mappedListing = mapTo(ListingCreate, storedListing);
 
     const listingEvents = mappedListing.listingEvents?.filter(
@@ -1757,9 +1952,36 @@ export class ListingService implements OnModuleInit {
       }),
     );
 
+    const listingsMarketingFlyerFile = {
+      fileId: mappedListing.listingsMarketingFlyerFile?.fileId,
+      label: mappedListing.listingsMarketingFlyerFile?.label,
+    };
+
+    const listingsAccessibleMarketingFlyerFile = {
+      fileId: mappedListing.listingsAccessibleMarketingFlyerFile?.fileId,
+      label: mappedListing.listingsAccessibleMarketingFlyerFile?.label,
+    };
+
     if (!dto.includeUnits) {
       delete mappedListing['units'];
       delete mappedListing['unitGroups'];
+    }
+
+    let copyOfMSQs = storedListing.listingMultiselectQuestions;
+    if (enableV2MSQ) {
+      // Remove any toRetire or retired MSQs before copying
+      copyOfMSQs = storedListing.listingMultiselectQuestions?.filter(
+        (question) => {
+          const mappedQuestion = mapTo(
+            ListingMultiselectQuestion,
+            question,
+          ).multiselectQuestions;
+          return (
+            mappedQuestion.status !== MultiselectQuestionsStatusEnum.toRetire &&
+            mappedQuestion.status !== MultiselectQuestionsStatusEnum.retired
+          );
+        },
+      );
     }
 
     const newListingData: ListingCreate = {
@@ -1776,11 +1998,17 @@ export class ListingService implements OnModuleInit {
           : undefined,
       listingEvents: listingEvents,
       listingImages: listingImages,
-      listingMultiselectQuestions:
-        storedListing.listingMultiselectQuestions?.map((question) => ({
-          id: question.multiselectQuestionId,
-          ordinal: question.ordinal,
-        })),
+      listingMultiselectQuestions: copyOfMSQs?.map((question) => ({
+        id: question.multiselectQuestionId,
+        ordinal: question.ordinal,
+      })),
+      listingsMarketingFlyerFile: mappedListing.listingsMarketingFlyerFile
+        ? listingsMarketingFlyerFile
+        : undefined,
+      listingsAccessibleMarketingFlyerFile:
+        mappedListing.listingsAccessibleMarketingFlyerFile
+          ? listingsAccessibleMarketingFlyerFile
+          : undefined,
       lotteryLastRunAt: undefined,
       lotteryLastPublishedAt: undefined,
       lotteryStatus: undefined,
@@ -1801,6 +2029,7 @@ export class ListingService implements OnModuleInit {
       requestingUser?.userRoles?.isPartner &&
       duplicateListingPermissions?.includes(UserRoleEnum.partner)
     ) {
+      await this.snapshotCreateService.createUserSnapshot(requestingUser.id);
       await this.prisma.userAccounts.update({
         data: {
           listings: {
@@ -1981,8 +2210,15 @@ export class ListingService implements OnModuleInit {
   */
   async update(dto: ListingUpdate, requestingUser: User): Promise<Listing> {
     // Remove requiredFields and minimumImagesRequired properties before saving to database
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { requiredFields, minimumImagesRequired, ...incomingDto } = dto;
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      requiredFields,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      minimumImagesRequired,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      listingFeaturesConfiguration,
+      ...incomingDto
+    } = dto;
     const storedListing = await this.findOrThrow(
       incomingDto.id,
       ListingViews.full,
@@ -1998,19 +2234,47 @@ export class ListingService implements OnModuleInit {
       },
     );
 
-    const rawJurisdiction = await this.prisma.jurisdictions.findFirst({
+    const rawJurisdiction = await this.prisma.jurisdictions.findUnique({
+      select: {
+        featureFlags: true,
+        listingApprovalPermissions: true,
+        id: true,
+      },
       where: {
         id: incomingDto.jurisdictions.id,
       },
-      include: {
-        featureFlags: true,
-      },
     });
-
     const enableUnitGroups = doJurisdictionHaveFeatureFlagSet(
       rawJurisdiction as Jurisdiction,
       FeatureFlagEnum.enableUnitGroups,
     );
+
+    const enableV2MSQ = doJurisdictionHaveFeatureFlagSet(
+      rawJurisdiction as Jurisdiction,
+      FeatureFlagEnum.enableV2MSQ,
+    );
+
+    const enableAutopublish = doJurisdictionHaveFeatureFlagSet(
+      rawJurisdiction as Jurisdiction,
+      FeatureFlagEnum.enableAutopublish,
+    );
+
+    if (!enableAutopublish) {
+      incomingDto.scheduledPublishAt = null;
+    }
+
+    // test if not publishing or unpublishing listing and scheduledPublishAt is set
+    if (
+      incomingDto.status === storedListing.status &&
+      incomingDto.status !== ListingsStatusEnum.active &&
+      incomingDto.scheduledPublishAt &&
+      enableAutopublish
+    ) {
+      incomingDto.scheduledPublishAt = this.normalizeScheduledPublishAt(
+        incomingDto.scheduledPublishAt,
+      );
+      this.checkScheduledPublishAtIsInFuture(incomingDto.scheduledPublishAt);
+    }
 
     if (
       (enableUnitGroups && incomingDto.units?.length > 0) ||
@@ -2022,6 +2286,21 @@ export class ListingService implements OnModuleInit {
         } with enableUnitGroups flag set to ${enableUnitGroups}`,
         status: 400,
       });
+    }
+    await this.snapshotCreateService.createListingSnapshot(incomingDto.id);
+    if (enableV2MSQ) {
+      const multiselectQuestionIds = dto.listingMultiselectQuestions.map(
+        (multiselectQuestion) => multiselectQuestion.id,
+      );
+      const previousMultiselectQuestionIds =
+        storedListing.listingMultiselectQuestions.map(
+          (multiselectQuestion) => multiselectQuestion.multiselectQuestionId,
+        );
+
+      await this.validateMultiselectQuestions(
+        multiselectQuestionIds,
+        previousMultiselectQuestionIds,
+      );
     }
 
     incomingDto.unitsAvailable = this.calculateUnitsAvailable(
@@ -2090,6 +2369,7 @@ export class ListingService implements OnModuleInit {
 
     const previousFeaturesId = storedListing.listingFeatures?.id;
     const previousUtilitiesId = storedListing.listingUtilities?.id;
+    const previousParkingTypeId = storedListing.parkType?.id;
     const previousNeighborhoodAmenitiesId =
       storedListing.listingNeighborhoodAmenities?.id;
 
@@ -2340,6 +2620,21 @@ export class ListingService implements OnModuleInit {
                 },
               }
             : undefined,
+          parkType: incomingDto.parkType
+            ? {
+                upsert: {
+                  where: {
+                    id: previousParkingTypeId,
+                  },
+                  create: {
+                    ...incomingDto.parkType,
+                  },
+                  update: {
+                    ...incomingDto.parkType,
+                  },
+                },
+              }
+            : undefined,
           listingsApplicationMailingAddress: mailAddress
             ? {
                 connect: {
@@ -2429,14 +2724,7 @@ export class ListingService implements OnModuleInit {
                         },
                       }
                     : undefined,
-                  unitAccessibilityPriorityTypes:
-                    unit.unitAccessibilityPriorityTypes
-                      ? {
-                          connect: {
-                            id: unit.unitAccessibilityPriorityTypes.id,
-                          },
-                        }
-                      : undefined,
+                  accessibilityPriorityType: unit.accessibilityPriorityType,
                   unitRentTypes: unit.unitRentTypes
                     ? {
                         connect: {
@@ -2465,6 +2753,7 @@ export class ListingService implements OnModuleInit {
                   sqFeetMax: group.sqFeetMax,
                   totalCount: group.totalCount,
                   totalAvailable: group.totalAvailable,
+                  accessibilityPriorityType: group.accessibilityPriorityType,
                   unitTypes: group.unitTypes
                     ? {
                         connect: group.unitTypes.map((type) => ({
@@ -2489,14 +2778,6 @@ export class ListingService implements OnModuleInit {
                         })),
                       }
                     : undefined,
-                  unitAccessibilityPriorityTypes:
-                    group.unitAccessibilityPriorityTypes
-                      ? {
-                          connect: {
-                            id: group.unitAccessibilityPriorityTypes.id,
-                          },
-                        }
-                      : undefined,
                 })),
               }
             : undefined,
@@ -2504,6 +2785,8 @@ export class ListingService implements OnModuleInit {
             ? {
                 create: incomingDto.unitsSummary.map((unitSummary) => ({
                   ...unitSummary,
+                  accessibilityPriorityType:
+                    unitSummary.accessibilityPriorityType,
                   unitTypes: unitSummary.unitTypes
                     ? {
                         connect: {
@@ -2511,14 +2794,6 @@ export class ListingService implements OnModuleInit {
                         },
                       }
                     : undefined,
-                  unitAccessibilityPriorityTypes:
-                    unitSummary.unitAccessibilityPriorityTypes
-                      ? {
-                          connect: {
-                            id: unitSummary.unitAccessibilityPriorityTypes.id,
-                          },
-                        }
-                      : undefined,
                 })),
               }
             : undefined,
@@ -2571,10 +2846,16 @@ export class ListingService implements OnModuleInit {
               },
             },
           },
-          property: incomingDto?.property
+          property: incomingDto.property
             ? {
                 connect: {
                   id: incomingDto.property.id,
+                },
+              }
+            : storedListing.property
+            ? {
+                disconnect: {
+                  id: storedListing.property.id,
                 },
               }
             : undefined,
@@ -2593,6 +2874,7 @@ export class ListingService implements OnModuleInit {
     if (!rawListing) {
       throw new HttpException('listing failed to save', 500);
     }
+    const mappedListing = mapTo(Listing, rawListing);
 
     // Incoming update removes the requiredDocumentsList. Need to disconnect before deleting
     if (
@@ -2616,48 +2898,152 @@ export class ListingService implements OnModuleInit {
       });
     }
 
-    const listingApprovalPermissions = (
-      await this.prisma.jurisdictions.findFirst({
-        where: { id: incomingDto.jurisdictions.id },
-      })
-    )?.listingApprovalPermissions;
+    const listingApprovalPermissions =
+      rawJurisdiction.listingApprovalPermissions;
 
     if (listingApprovalPermissions?.length > 0)
       await this.listingApprovalNotify({
         user: requestingUser,
-        listingInfo: { id: incomingDto.id, name: incomingDto.name },
+        listingInfo: { id: mappedListing.id, name: mappedListing.name },
         approvingRoles: listingApprovalPermissions,
         status: incomingDto.status,
         previousStatus: storedListing.status,
-        jurisId: incomingDto.jurisdictions.id,
+        jurisId: rawJurisdiction.id,
       });
 
-    if (
+    if (mappedListing.status === ListingsStatusEnum.active) {
+      await this.sendListingPublishNotification(mappedListing);
+    }
+
+    if (enableV2MSQ && mappedListing.status === ListingsStatusEnum.active) {
+      const multiselectQuestions =
+        mappedListing.listingMultiselectQuestions.map(
+          (listingMultiselectQuestion) =>
+            listingMultiselectQuestion.multiselectQuestions,
+        );
+      void this.multiselectQuestionService.activateMany(multiselectQuestions);
+    } else if (
       storedListing.status === ListingsStatusEnum.active &&
-      incomingDto.status === ListingsStatusEnum.closed
+      mappedListing.status === ListingsStatusEnum.closed
     ) {
       // if listing is closed for the first time the application flag set job needs to run
-      if (
-        process.env.DUPLICATES_CLOSE_DATE &&
-        dayjs(process.env.DUPLICATES_CLOSE_DATE, 'YYYY-MM-DD HH:mm Z') <
-          dayjs(new Date())
-      ) {
-        await this.afsService.processDuplicates(incomingDto.id);
-      } else {
-        await this.afsService.process(incomingDto.id);
-      }
+      await this.afsService.processDuplicates(mappedListing.id);
 
       // if the listing is closed for the first time the expire_after value should be set on all applications
-      void this.setExpireAfterValueOnApplications(rawListing.id);
+      void this.setExpireAfterValueOnApplications(mappedListing.id);
+    }
+
+    if (enableV2MSQ) {
+      void this.multiselectQuestionService.retireMultiselectQuestions();
     }
 
     await this.cachePurge(
       storedListing.status,
       incomingDto.status,
-      rawListing.id,
+      mappedListing.id,
     );
 
-    return mapTo(Listing, rawListing);
+    return mappedListing;
+  }
+
+  /**
+   * When listing is published, notify users with declared approval for example
+   */
+  async sendListingPublishNotification(listing: Listing): Promise<void> {
+    const priorityTypes = Array.from(
+      new Set(
+        (listing.units || [])
+          .map((unit) => unit.accessibilityPriorityType)
+          .filter((type) => !!type),
+      ),
+    );
+
+    const preferenceFilters = priorityTypes.map((priorityType) => {
+      return {
+        [priorityType]: true,
+      } as Prisma.UserNotificationPreferencesWhereInput;
+    });
+
+    if (listing?.region) {
+      preferenceFilters.push({
+        regions: {
+          has: listing.region,
+        },
+      } as Prisma.UserNotificationPreferencesWhereInput);
+    }
+
+    if (listing.reviewOrderType === ReviewOrderTypeEnum.lottery) {
+      preferenceFilters.push({
+        lottery: true,
+      });
+    }
+
+    const emailUsers = await this.prisma.userAccounts.findMany({
+      select: {
+        email: true,
+        language: true,
+      },
+      where: {
+        NOT: {
+          email: '',
+        },
+        AND: [
+          {
+            userPreferences: {
+              sendEmailNotifications: true,
+            },
+          },
+          {
+            notificationPreferences: {
+              OR: preferenceFilters,
+            },
+          },
+        ],
+      },
+    });
+
+    if (!emailUsers.length) {
+      this.logger.log(
+        `Skipping publish notification for listing ${listing.id}: no matching users`,
+      );
+      return;
+    }
+
+    const emailByLanguage = {};
+    Object.keys(LanguagesEnum).forEach((languageKey) => {
+      emailByLanguage[languageKey] = emailUsers
+        .filter((user) => user.language === languageKey)
+        .map((userObj) => userObj.email);
+    });
+
+    const noLanguageIndicated = emailUsers
+      .filter((user) => !user.language)
+      .map((userObj) => userObj.email);
+
+    if (!emailByLanguage[LanguagesEnum.en])
+      emailByLanguage[LanguagesEnum.en] = noLanguageIndicated;
+    else
+      emailByLanguage[LanguagesEnum.en] = [
+        ...emailByLanguage[LanguagesEnum.en],
+        ...noLanguageIndicated,
+      ];
+
+    const jurisdiction = await this.prisma.jurisdictions.findUnique({
+      select: {
+        id: true,
+        publicUrl: true,
+      },
+      where: {
+        id: listing.jurisdictions.id,
+      },
+    });
+
+    await this.emailService.listingPublishNotification(
+      { id: jurisdiction.id },
+      listing,
+      priorityTypes,
+      emailByLanguage,
+    );
   }
 
   /**
@@ -2705,10 +3091,11 @@ export class ListingService implements OnModuleInit {
   */
   addUnitsSummarized = async (listing: Listing) => {
     if (Array.isArray(listing.units) && listing.units.length > 0) {
+      const unitsWithCharts = listing.units.filter((unit) => unit.amiChart?.id);
       const amiChartsRaw = await this.prisma.amiChart.findMany({
         where: {
           id: {
-            in: listing.units.map((unit) => unit.amiChart?.id),
+            in: unitsWithCharts.map((unit) => unit.amiChart?.id),
           },
         },
       });
@@ -2806,6 +3193,74 @@ export class ListingService implements OnModuleInit {
     }
   };
 
+  normalizeScheduledPublishAt(scheduledPublishAt: Date): Date {
+    const appTimezone = process.env.TIME_ZONE;
+    const dateStr = dayjs.utc(scheduledPublishAt).format('YYYY-MM-DD');
+    return dayjs.tz(dateStr, 'YYYY-MM-DD', appTimezone).startOf('day').toDate();
+  }
+
+  private checkScheduledPublishAtIsInFuture(scheduledPublishAt: Date): void {
+    const appTimezone = process.env.TIME_ZONE;
+    const minimumScheduledPublishAt = dayjs
+      .utc()
+      .tz(appTimezone)
+      .add(1, 'day')
+      .startOf('day');
+
+    const incomingScheduledPublishAt = dayjs
+      .utc(scheduledPublishAt)
+      .tz(appTimezone);
+
+    if (incomingScheduledPublishAt.isBefore(minimumScheduledPublishAt)) {
+      throw new BadRequestException([
+        'scheduledPublishAt must be in the future',
+      ]);
+    }
+  }
+
+  /**
+   * validates that the requested multiselectQuestions to be associated with the listing are in a valid state
+   * @param multiselectQuestionIds ids of the multiselectQuestions to be associated
+   * @param previousMultiselectQuestionIds optional param, previous ids if any from earlier edits
+   */
+  async validateMultiselectQuestions(
+    multiselectQuestionIds: string[],
+    previousMultiselectQuestionIds: string[] = [],
+  ) {
+    const multiselectQuestions =
+      await this.prisma.multiselectQuestions.findMany({
+        select: { id: true, name: true, status: true },
+        where: { id: { in: multiselectQuestionIds } },
+      });
+
+    const allowedStatuses: MultiselectQuestionsStatusEnum[] = [
+      MultiselectQuestionsStatusEnum.active,
+      MultiselectQuestionsStatusEnum.visible,
+    ];
+
+    const invalid = [];
+    for (const msq of multiselectQuestions) {
+      if (
+        (msq.status === MultiselectQuestionsStatusEnum.toRetire ||
+          msq.status === MultiselectQuestionsStatusEnum.retired) &&
+        previousMultiselectQuestionIds.length
+      ) {
+        if (!previousMultiselectQuestionIds.includes(msq.id)) {
+          invalid.push(msq.name);
+        }
+      } else if (!allowedStatuses.includes(msq.status)) {
+        invalid.push(msq.name);
+      }
+    }
+    if (invalid.length) {
+      throw new BadRequestException({
+        message: `The following multiselectQuestions provided are not in a valid state to be associated to this listing: ${invalid.join(
+          ', ',
+        )}`,
+      });
+    }
+  }
+
   /**
     runs the job to auto close listings that are passed their due date
     will call the the cache purge to purge all listings as long as updates had to be made
@@ -2835,6 +3290,10 @@ export class ListingService implements OnModuleInit {
       },
     });
     const listingIds = listings.map((listing) => listing.id);
+
+    for (const listingSave of listingIds) {
+      await this.snapshotCreateService.createListingSnapshot(listingSave);
+    }
 
     const res = await this.prisma.listings.updateMany({
       data: {
@@ -2868,6 +3327,7 @@ export class ListingService implements OnModuleInit {
       for (const listing of listingIds) {
         await this.setExpireAfterValueOnApplications(listing);
       }
+      void this.multiselectQuestionService.retireMultiselectQuestions();
     }
 
     return {
@@ -2901,24 +3361,46 @@ export class ListingService implements OnModuleInit {
     return listing.jurisdictionId;
   }
 
-  async mapMarkers(): Promise<ListingMapMarker[]> {
-    const listingsRaw = await this.prisma.listings.findMany({
+  async mapMarkers(params: ListingsQueryParams): Promise<ListingMapMarker[]> {
+    const filters: ListingFilterParams[] = [
+      ...(params?.filter || []),
+      {
+        $comparison: Compare['='],
+        status: ListingsStatusEnum.active,
+      },
+    ];
+
+    const mapMarkersRaw = await this.prisma.listings.findMany({
       select: {
         id: true,
-        listingsBuildingAddress: true,
+        listingsBuildingAddress: {
+          select: {
+            latitude: true,
+            longitude: true,
+          },
+        },
       },
       where: {
-        status: ListingsStatusEnum.active,
+        ...this.buildWhereClause(filters, params?.search),
+        buildingAddressId: {
+          not: null,
+        },
+        listingsBuildingAddress: {
+          latitude: {
+            not: null,
+          },
+          longitude: {
+            not: null,
+          },
+        },
       },
     });
 
-    const listings = mapTo(Listing, listingsRaw);
-
-    return listings.map((listing) => {
+    return mapMarkersRaw.map((mapMarker) => {
       return {
-        id: listing.id,
-        lat: listing.listingsBuildingAddress?.latitude,
-        lng: listing.listingsBuildingAddress?.longitude,
+        id: mapMarker.id,
+        lat: Number(mapMarker.listingsBuildingAddress.latitude),
+        lng: Number(mapMarker.listingsBuildingAddress.longitude),
       } as ListingMapMarker;
     });
   }

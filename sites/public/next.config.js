@@ -29,7 +29,17 @@ const bloomTheme = require("./tailwind.config.js")
 const tailwindVars = require("@bloom-housing/ui-components/tailwind.tosass.js")(bloomTheme)
 
 module.exports = withBundleAnalyzer({
+  typescript: {
+    ignoreBuildErrors: process.env.DISABLE_NEXT_TYPECHECK === "TRUE",
+  },
+  experimental: {
+    webpackBuildWorker: true,
+    // Uncomment line below before building when using symlink for UI-C
+    // esmExternals: "loose"
+  },
   env: {
+    // Set ALLOW_SEO_INDEXING=true only in production so dev/staging get noindex
+    allowSeoIndexing: process.env.ALLOW_SEO_INDEXING === "TRUE" ? "TRUE" : "",
     backendApiBase: BACKEND_API_BASE,
     listingServiceUrl: BACKEND_API_BASE + LISTINGS_QUERY,
     listingPhotoSize: process.env.LISTING_PHOTO_SIZE || "1302",
@@ -49,7 +59,10 @@ module.exports = withBundleAnalyzer({
     siteMessageWindow: process.env.SITE_MESSAGE_WINDOW,
     reCaptchaKey: process.env.RECAPTCHA_KEY,
     maxBrowseListings: process.env.MAX_BROWSE_LISTINGS,
-    rtlLanguages: process.env.RTL_LANGUAGES || "ar",
+    rtlLanguages: "ar,fa",
+    //  The `googleMapsApiKey` environment variable is exposed to the client-side and used directly in components (ListingMap.tsx). While Google Maps API keys for browser use are expected to be public, they MUST be restricted by HTTP referrer in the Google Cloud Console to prevent unauthorized usage and quota theft.
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
+    googleMapsMapId: process.env.GOOGLE_MAPS_MAP_ID,
   },
   i18n: {
     locales: process.env.LANGUAGES ? process.env.LANGUAGES.split(",") : ["en"],
@@ -70,13 +83,33 @@ module.exports = withBundleAnalyzer({
       type: "asset/source",
     })
 
+    // Suppress noisy-but-harmless protobufjs dynamic require warning
+    // from @opentelemetry/exporter-metrics-otlp-grpc
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      {
+        module:
+          /node_modules\/@opentelemetry\/exporter-metrics-otlp-grpc\/node_modules\/protobufjs/,
+        message: /Critical dependency/,
+      },
+    ]
+
     return config
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Uncomment line below before building when using symlink for UI-C
-  // experimental: { esmExternals: "loose" },
+  headers() {
+    if (process.env.ALLOW_SEO_INDEXING === "TRUE") {
+      return []
+    }
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+    ]
+  },
 })
 
 if (process.env.SENTRY_ORG) {

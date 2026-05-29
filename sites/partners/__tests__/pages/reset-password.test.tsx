@@ -24,7 +24,7 @@ describe("reset-password", () => {
     mockNextRouter()
     const { getByText, getByLabelText } = render(<ResetPassword />)
 
-    expect(getByText("Change password", { selector: "h2" })).toBeInTheDocument()
+    expect(getByText("Change password", { selector: "h1" })).toBeInTheDocument()
     expect(getByLabelText("Password")).toBeInTheDocument()
     const passwordInput = getByLabelText("Password confirmation")
     expect(passwordInput).toBeInTheDocument()
@@ -39,7 +39,9 @@ describe("reset-password", () => {
       expect(queryByText("Please enter new login password")).not.toBeInTheDocument()
       expect(queryByText("The passwords do not match")).not.toBeInTheDocument()
       expect(
-        queryByText("There was an error. Please try again, or contact support for help.")
+        queryByText(
+          "There was an error. Please try again, or contact support at email@email.com for help."
+        )
       ).not.toBeInTheDocument()
       expect(
         queryByText(
@@ -170,7 +172,9 @@ describe("reset-password", () => {
     })
 
     const errorMessage = await waitFor(() =>
-      getByText("There was an error. Please try again, or contact support for help.")
+      getByText(
+        "There was an error. Please try again, or contact support at email@email.com for help."
+      )
     )
     expect(errorMessage).toBeInTheDocument()
   })

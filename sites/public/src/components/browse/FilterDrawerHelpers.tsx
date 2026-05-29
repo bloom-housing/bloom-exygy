@@ -3,9 +3,12 @@ import {
   FilterAvailabilityEnum,
   HomeTypeEnum,
   ListingFeatures,
+  ListingFeaturesConfiguration,
   ListingFilterKeys,
   ListingFilterParams,
+  ParkingTypeEnum,
   RegionEnum,
+  UnitAccessibilityPriorityTypeEnum,
   UnitTypeEnum,
 } from "@bloom-housing/shared-helpers/src/types/backend-swagger"
 import { UseFormMethods } from "react-hook-form"
@@ -34,10 +37,14 @@ export interface FilterData {
   listingFeatures?: { [K in keyof ListingFeatures]?: BooleanOrBooleanString }
   monthlyRent?: { [K in "maxRent" | "minRent"]?: string }
   regions?: { [K in RegionEnum]: BooleanOrBooleanString }
+  configurableRegions?: string
+  bathrooms?: { [K in "1" | "2" | "3" | "4"]?: BooleanOrBooleanString }
   section8Acceptance?: BooleanOrBooleanString
   reservedCommunityTypes?: { [K in ReservedCommunityTypes]?: BooleanOrBooleanString }
   multiselectQuestions?: Record<string, BooleanOrBooleanString>
   name?: string
+  parkingType?: { [K in ParkingTypeEnum]?: BooleanOrBooleanString }
+  accessibilityPriorityTypes?: { [K in UnitAccessibilityPriorityTypeEnum]?: BooleanOrBooleanString }
 }
 
 export interface FilterField {
@@ -61,6 +68,7 @@ export interface RentSectionProps {
   setError: UseFormMethods["setError"]
   clearErrors: UseFormMethods["clearErrors"]
   errors: UseFormMethods["formState"]["errors"]
+  enableSection8?: boolean
 }
 
 export interface SearchSectionProps {
@@ -68,15 +76,25 @@ export interface SearchSectionProps {
   nameState: string
 }
 
+export interface AccessibilitySectionProps {
+  register: UseFormMethods["register"]
+  filterState: FilterData
+  listingFeaturesConfiguration: ListingFeaturesConfiguration
+}
+
 const arrayFilters: ListingFilterKeys[] = [
   ListingFilterKeys.bedroomTypes,
+  ListingFilterKeys.bathrooms,
   ListingFilterKeys.counties,
   ListingFilterKeys.homeTypes,
   ListingFilterKeys.listingFeatures,
   ListingFilterKeys.regions,
+  ListingFilterKeys.configurableRegions,
   ListingFilterKeys.reservedCommunityTypes,
   ListingFilterKeys.availabilities,
   ListingFilterKeys.multiselectQuestions,
+  ListingFilterKeys.parkingType,
+  ListingFilterKeys.accessibilityPriorityTypes,
 ]
 
 const booleanFilters: ListingFilterKeys[] = [
@@ -190,7 +208,7 @@ export const CheckboxGroup = (props: CheckboxGroupProps) => {
       <legend className={styles["filter-section-label"]}>{props.groupLabel}</legend>
       <Grid spacing="sm">
         <Grid.Row columns={props.customColumnNumber ?? 2}>
-          {props.fields.map((field) => {
+          {props.fields?.map((field) => {
             return (
               <Grid.Cell key={`${field.key}-cell`}>
                 <Field
@@ -238,7 +256,9 @@ export const validateRentValues = (
 export const RentSection = (props: RentSectionProps) => {
   return (
     <fieldset className={styles["filter-section"]}>
-      <legend className={styles["filter-section-label"]}>{t("t.rent")}</legend>
+      <legend className={`${styles["filter-section-label"]} ${styles["parent-label"]}`}>
+        {t("t.rent")}
+      </legend>
       <Grid spacing="sm">
         <Grid.Row>
           <Grid.Cell>
@@ -280,23 +300,81 @@ export const RentSection = (props: RentSectionProps) => {
             />
           </Grid.Cell>
         </Grid.Row>
-        <Grid.Row>
-          <Grid.Cell>
-            <Field
-              id={ListingFilterKeys.section8Acceptance}
-              name={ListingFilterKeys.section8Acceptance}
-              label={t("listings.section8Acceptance")}
-              labelClassName={styles["filter-checkbox-label"]}
-              type="checkbox"
-              register={props.register}
-              inputProps={{
-                defaultChecked: isTrue(props.filterState?.[ListingFilterKeys.section8Acceptance]),
-              }}
-            />
-          </Grid.Cell>
-        </Grid.Row>
+        {props.enableSection8 && (
+          <Grid.Row>
+            <Grid.Cell>
+              <Field
+                id={ListingFilterKeys.section8Acceptance}
+                name={ListingFilterKeys.section8Acceptance}
+                label={t("listings.section8Acceptance")}
+                labelClassName={styles["filter-checkbox-label"]}
+                type="checkbox"
+                register={props.register}
+                inputProps={{
+                  defaultChecked: isTrue(props.filterState?.[ListingFilterKeys.section8Acceptance]),
+                }}
+              />
+            </Grid.Cell>
+          </Grid.Row>
+        )}
       </Grid>
     </fieldset>
+  )
+}
+
+export const AccessibilitySection = (props: AccessibilitySectionProps) => {
+  const accessibilityCategories = props.listingFeaturesConfiguration?.categories
+
+  if (accessibilityCategories?.length > 0) {
+    return (
+      <fieldset className={styles["filter-section"]}>
+        <legend className={`${styles["filter-section-label"]} ${styles["parent-label"]}`}>
+          {t("listings.sections.accessibilityFeatures")}
+        </legend>
+        <div className={styles["accessibility-category-groups"]}>
+          {accessibilityCategories.map((category) => {
+            const categoryFeatureKeys = category.fields
+              .map((field) => field.id)
+              .sort((a, b) =>
+                t(`eligibility.accessibility.${a}`).localeCompare(
+                  t(`eligibility.accessibility.${b}`)
+                )
+              )
+
+            if (!categoryFeatureKeys.length) {
+              return null
+            }
+
+            return (
+              <CheckboxGroup
+                key={category.id}
+                groupLabel={t(`eligibility.accessibility.categoryTitle.${category.id}`)}
+                fields={buildDefaultFilterFields(
+                  ListingFilterKeys.listingFeatures,
+                  "eligibility.accessibility",
+                  categoryFeatureKeys,
+                  props.filterState
+                )}
+                register={props.register}
+              />
+            )
+          })}
+        </div>
+      </fieldset>
+    )
+  }
+
+  return (
+    <CheckboxGroup
+      groupLabel={t("eligibility.accessibility.title")}
+      fields={buildDefaultFilterFields(
+        ListingFilterKeys.listingFeatures,
+        "eligibility.accessibility",
+        getAccessibilityFeatureKeys(props.listingFeaturesConfiguration),
+        props.filterState
+      )}
+      register={props.register}
+    />
   )
 }
 
@@ -330,6 +408,8 @@ export const encodeFilterDataToBackendFilters = (data: FilterData): ListingFilte
         if (field[1]) {
           if (filterType === ListingFilterKeys.bedroomTypes) {
             selectedFields.push(unitTypeMapping[field[0]]?.value)
+          } else if (filterType === ListingFilterKeys.bathrooms) {
+            selectedFields.push(parseInt(field[0]))
           } else {
             selectedFields.push(field[0])
           }
@@ -458,6 +538,8 @@ export const decodeQueryToFilterData = (parsedQuery: ParsedUrlQuery): FilterData
       //custom separator to avoid conflicts with higher values with commas
       const rentArr = userSelections.split("-")
       filterData[filterType] = { minRent: rentArr[0] ?? "", maxRent: rentArr[1] ?? "" }
+    } else if (filterType === ListingFilterKeys.bathrooms && typeof userSelections === "string") {
+      filterData[filterType] = userSelections
     } else if (filterType === ListingFilterKeys.name) {
       filterData[filterType] = userSelections
     }
@@ -491,9 +573,21 @@ export const removeUnselectedFilterData = (data: FilterData): FilterData => {
       userSelections["maxRent"]
     ) {
       cleanedFilterData[filterType] = userSelections
+    } else if (filterType === ListingFilterKeys.bathrooms && userSelections) {
+      cleanedFilterData[filterType] = userSelections
     } else if (filterType === ListingFilterKeys.name && userSelections) {
       cleanedFilterData[filterType] = userSelections
     }
   })
   return cleanedFilterData
+}
+
+export const getAccessibilityFeatureKeys = (config: ListingFeaturesConfiguration) => {
+  if (config?.categories?.length > 0) {
+    return config.categories
+      .flatMap((category) => category.fields.map((field) => field.id))
+      .sort((a, b) => a.localeCompare(b))
+  } else {
+    return config?.fields?.map((field) => field.id).sort((a, b) => a.localeCompare(b)) || []
+  }
 }

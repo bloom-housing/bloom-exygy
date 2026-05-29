@@ -19,7 +19,7 @@ import * as helpers from "../../../../../src/lib/helpers"
 
 jest.mock("../../../../../src/lib/helpers", () => ({
   ...jest.requireActual("../../../../../src/lib/helpers"),
-  cloudinaryFileUploader: jest.fn(),
+  fileUploader: jest.fn(),
 }))
 
 beforeAll(() => {
@@ -54,6 +54,7 @@ describe("ApplicationTypes", () => {
           requiredFields={[]}
           jurisdiction={"jurisdictionA"}
           disableCommonApplication={false}
+          enableReferralQuestionUnits={false}
         />
       </FormProviderWrapper>
     )
@@ -91,6 +92,7 @@ describe("ApplicationTypes", () => {
           requiredFields={[]}
           jurisdiction={"jurisdictionA"}
           disableCommonApplication={false}
+          enableReferralQuestionUnits={false}
         />
       </FormProviderWrapper>
     )
@@ -132,6 +134,7 @@ describe("ApplicationTypes", () => {
             requiredFields={[]}
             jurisdiction={"jurisdictionA"}
             disableCommonApplication={false}
+            enableReferralQuestionUnits={false}
           />
         </FormProviderWrapper>
       )
@@ -162,6 +165,7 @@ describe("ApplicationTypes", () => {
             requiredFields={[]}
             jurisdiction={"jurisdictionA"}
             disableCommonApplication={false}
+            enableReferralQuestionUnits={false}
           />
         </FormProviderWrapper>
       )
@@ -189,6 +193,7 @@ describe("ApplicationTypes", () => {
               requiredFields={[]}
               jurisdiction={"jurisdictionA"}
               disableCommonApplication={false}
+              enableReferralQuestionUnits={false}
             />
           </FormProviderWithJurisdiction>
         </AuthContext.Provider>
@@ -208,13 +213,13 @@ describe("ApplicationTypes", () => {
     })
 
     it("should disable language selector and save button during file upload, then enable save after upload", async () => {
-      const mockCloudinaryUploader = helpers.cloudinaryFileUploader as jest.MockedFunction<
-        typeof helpers.cloudinaryFileUploader
+      const mockFileUploader = helpers.fileUploader as jest.MockedFunction<
+        typeof helpers.fileUploader
       >
       // eslint-disable-next-line @typescript-eslint/require-await
-      mockCloudinaryUploader.mockImplementation(async ({ setCloudinaryData, setProgressValue }) => {
+      mockFileUploader.mockImplementation(async ({ setFileUploadData, setProgressValue }) => {
         setProgressValue(100)
-        setCloudinaryData({
+        setFileUploadData({
           id: "test-cloudinary-id/test-file",
           url: "https://test.cloudinary.com/test-file.pdf",
         })
@@ -228,6 +233,7 @@ describe("ApplicationTypes", () => {
               requiredFields={[]}
               jurisdiction={"jurisdictionA"}
               disableCommonApplication={false}
+              enableReferralQuestionUnits={false}
             />
           </FormProviderWithJurisdiction>
         </AuthContext.Provider>

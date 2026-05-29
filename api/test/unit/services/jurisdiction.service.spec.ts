@@ -5,6 +5,8 @@ import { JurisdictionCreate } from '../../../src/dtos/jurisdictions/jurisdiction
 import { JurisdictionUpdate } from '../../../src/dtos/jurisdictions/jurisdiction-update.dto';
 import { LanguagesEnum } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { ApplicationAccessibilityFeatureEnum } from '../../../src/enums/applications/application-accessibility-feature-enum';
+import { HouseholdMemberRelationship } from '../../../src/enums/applications/household-member-relationship-enum';
 
 describe('Testing jurisdiction service', () => {
   let service: JurisdictionService;
@@ -22,6 +24,7 @@ describe('Testing jurisdiction service', () => {
       publicUrl: `publicUrl: ${position}`,
       emailFromAddress: `emailFromAddress: ${position}`,
       rentalAssistanceDefault: `rentalAssistanceDefault: ${position}`,
+      referralSummaryDefault: `referralSummaryDefault: ${position}`,
       whatToExpect: `whatToExpect: ${position}`,
       whatToExpectAdditionalText: `whatToExpectAdditionalText: ${position}`,
       whatToExpectUnderConstruction: `whatToExpectUnderConstruction: ${position}`,
@@ -140,6 +143,7 @@ describe('Testing jurisdiction service', () => {
       publicUrl: `publicUrl: 3`,
       emailFromAddress: `emailFromAddress: 3`,
       rentalAssistanceDefault: `rentalAssistanceDefault: 3`,
+      referralSummaryDefault: `referralSummaryDefault: 3`,
       whatToExpect: `whatToExpect: 3`,
       whatToExpectAdditionalText: `whatToExpectAdditionalText: 3`,
       whatToExpectUnderConstruction: `whatToExpectUnderConstruction: 3`,
@@ -147,6 +151,22 @@ describe('Testing jurisdiction service', () => {
       allowSingleUseCodeLogin: false,
       listingApprovalPermissions: [],
       duplicateListingPermissions: [],
+      regions: [],
+      requiredListingFields: [],
+      visibleAccessibilityPriorityTypes: [],
+      visibleApplicationAccessibilityFeatures: [
+        ApplicationAccessibilityFeatureEnum.mobility,
+        ApplicationAccessibilityFeatureEnum.hearing,
+        ApplicationAccessibilityFeatureEnum.vision,
+      ],
+      visibleNeighborhoodAmenities: [],
+      visibleSpokenLanguages: [],
+      visibleHouseholdMemberRelationships: [
+        HouseholdMemberRelationship.spouse,
+        HouseholdMemberRelationship.child,
+        HouseholdMemberRelationship.parent,
+        HouseholdMemberRelationship.other,
+      ],
     };
 
     expect(await service.create(params)).toEqual(mockedValue);
@@ -160,6 +180,7 @@ describe('Testing jurisdiction service', () => {
         publicUrl: `publicUrl: 3`,
         emailFromAddress: `emailFromAddress: 3`,
         rentalAssistanceDefault: `rentalAssistanceDefault: 3`,
+        referralSummaryDefault: `referralSummaryDefault: 3`,
         whatToExpect: `whatToExpect: 3`,
         whatToExpectAdditionalText: `whatToExpectAdditionalText: 3`,
         whatToExpectUnderConstruction: `whatToExpectUnderConstruction: 3`,
@@ -167,6 +188,24 @@ describe('Testing jurisdiction service', () => {
         allowSingleUseCodeLogin: false,
         listingApprovalPermissions: [],
         duplicateListingPermissions: [],
+        listingFeaturesConfiguration: undefined,
+        raceEthnicityConfiguration: undefined,
+        regions: [],
+        requiredListingFields: [],
+        visibleAccessibilityPriorityTypes: [],
+        visibleApplicationAccessibilityFeatures: [
+          ApplicationAccessibilityFeatureEnum.mobility,
+          ApplicationAccessibilityFeatureEnum.hearing,
+          ApplicationAccessibilityFeatureEnum.vision,
+        ],
+        visibleNeighborhoodAmenities: [],
+        visibleSpokenLanguages: [],
+        visibleHouseholdMemberRelationships: [
+          HouseholdMemberRelationship.spouse,
+          HouseholdMemberRelationship.child,
+          HouseholdMemberRelationship.parent,
+          HouseholdMemberRelationship.other,
+        ],
       },
       include: {
         featureFlags: true,
@@ -197,6 +236,7 @@ describe('Testing jurisdiction service', () => {
       publicUrl: `publicUrl: 3`,
       emailFromAddress: `emailFromAddress: 3`,
       rentalAssistanceDefault: `rentalAssistanceDefault: 3`,
+      referralSummaryDefault: `referralSummaryDefault: 3`,
       whatToExpect: `whatToExpect: 3`,
       whatToExpectAdditionalText: `whatToExpectAdditionalText: 3`,
       whatToExpectUnderConstruction: `whatToExpectUnderConstruction: 3`,
@@ -204,10 +244,28 @@ describe('Testing jurisdiction service', () => {
       allowSingleUseCodeLogin: false,
       listingApprovalPermissions: [],
       duplicateListingPermissions: [],
+      regions: [],
+      requiredListingFields: [],
+      visibleAccessibilityPriorityTypes: [],
+      visibleApplicationAccessibilityFeatures: [
+        ApplicationAccessibilityFeatureEnum.mobility,
+        ApplicationAccessibilityFeatureEnum.hearing,
+        ApplicationAccessibilityFeatureEnum.vision,
+      ],
+      visibleSpokenLanguages: [],
+      visibleNeighborhoodAmenities: [],
+      visibleHouseholdMemberRelationships: [
+        HouseholdMemberRelationship.spousePartner,
+        HouseholdMemberRelationship.child,
+        HouseholdMemberRelationship.parent,
+        HouseholdMemberRelationship.liveInAide,
+      ],
     };
 
     expect(await service.update(params)).toEqual({
       id: mockedJurisdiction.id,
+      createdAt: date,
+      updatedAt: date,
       name: `updated jurisdiction 3`,
       notificationsSignUpUrl: `notificationsSignUpUrl: 3`,
       languages: [LanguagesEnum.en],
@@ -215,12 +273,29 @@ describe('Testing jurisdiction service', () => {
       publicUrl: `publicUrl: 3`,
       emailFromAddress: `emailFromAddress: 3`,
       rentalAssistanceDefault: `rentalAssistanceDefault: 3`,
+      referralSummaryDefault: `referralSummaryDefault: 3`,
       whatToExpect: `whatToExpect: 3`,
       whatToExpectAdditionalText: `whatToExpectAdditionalText: 3`,
       whatToExpectUnderConstruction: `whatToExpectUnderConstruction: 3`,
       enablePartnerSettings: true,
-      createdAt: date,
-      updatedAt: date,
+      multiselectQuestions: undefined,
+      minimumListingPublishImagesRequired: undefined,
+      enablePartnerDemographics: undefined,
+      enableGeocodingPreferences: undefined,
+      enableGeocodingRadiusMethod: undefined,
+      allowSingleUseCodeLogin: undefined,
+      listingApprovalPermissions: undefined,
+      duplicateListingPermissions: undefined,
+      featureFlags: undefined,
+      requiredListingFields: undefined,
+      visibleNeighborhoodAmenities: undefined,
+      visibleAccessibilityPriorityTypes: undefined,
+      visibleApplicationAccessibilityFeatures: undefined,
+      visibleSpokenLanguages: undefined,
+      visibleHouseholdMemberRelationships: undefined,
+      regions: undefined,
+      listingFeaturesConfiguration: undefined,
+      raceEthnicityConfiguration: undefined,
     });
 
     expect(prisma.jurisdictions.findFirst).toHaveBeenCalledWith({
@@ -238,6 +313,7 @@ describe('Testing jurisdiction service', () => {
         publicUrl: `publicUrl: 3`,
         emailFromAddress: `emailFromAddress: 3`,
         rentalAssistanceDefault: `rentalAssistanceDefault: 3`,
+        referralSummaryDefault: `referralSummaryDefault: 3`,
         whatToExpect: `whatToExpect: 3`,
         whatToExpectAdditionalText: `whatToExpectAdditionalText: 3`,
         whatToExpectUnderConstruction: `whatToExpectUnderConstruction: 3`,
@@ -245,6 +321,23 @@ describe('Testing jurisdiction service', () => {
         allowSingleUseCodeLogin: false,
         listingApprovalPermissions: [],
         duplicateListingPermissions: [],
+        listingFeaturesConfiguration: undefined,
+        regions: [],
+        requiredListingFields: [],
+        visibleAccessibilityPriorityTypes: [],
+        visibleApplicationAccessibilityFeatures: [
+          ApplicationAccessibilityFeatureEnum.mobility,
+          ApplicationAccessibilityFeatureEnum.hearing,
+          ApplicationAccessibilityFeatureEnum.vision,
+        ],
+        visibleNeighborhoodAmenities: [],
+        visibleSpokenLanguages: [],
+        visibleHouseholdMemberRelationships: [
+          HouseholdMemberRelationship.spousePartner,
+          HouseholdMemberRelationship.child,
+          HouseholdMemberRelationship.parent,
+          HouseholdMemberRelationship.liveInAide,
+        ],
       },
       where: {
         id: mockedJurisdiction.id,
@@ -269,6 +362,7 @@ describe('Testing jurisdiction service', () => {
       publicUrl: `publicUrl: 3`,
       emailFromAddress: `emailFromAddress: 3`,
       rentalAssistanceDefault: `rentalAssistanceDefault: 3`,
+      referralSummaryDefault: `referralSummaryDefault: 3`,
       whatToExpect: `whatToExpect: 3`,
       whatToExpectAdditionalText: `whatToExpectAdditionalText: 3`,
       whatToExpectUnderConstruction: `whatToExpectUnderConstruction: 3`,
@@ -276,6 +370,20 @@ describe('Testing jurisdiction service', () => {
       allowSingleUseCodeLogin: false,
       listingApprovalPermissions: [],
       duplicateListingPermissions: [],
+      regions: [],
+      requiredListingFields: [],
+      visibleAccessibilityPriorityTypes: [],
+      visibleApplicationAccessibilityFeatures: [
+        ApplicationAccessibilityFeatureEnum.mobility,
+        ApplicationAccessibilityFeatureEnum.hearing,
+        ApplicationAccessibilityFeatureEnum.vision,
+      ],
+      visibleNeighborhoodAmenities: [],
+      visibleSpokenLanguages: [],
+      visibleHouseholdMemberRelationships: [
+        HouseholdMemberRelationship.spouse,
+        HouseholdMemberRelationship.child,
+      ],
     };
 
     await expect(async () => await service.update(params)).rejects.toThrowError(

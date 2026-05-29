@@ -1,6 +1,4 @@
 import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
-import { ResponseError } from '@sendgrid/helpers/classes';
-import { MailDataRequired } from '@sendgrid/helpers/classes/mail';
 import fs from 'fs';
 import Handlebars from 'handlebars';
 import Polyglot from 'node-polyglot';
@@ -9,12 +7,19 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import tz from 'dayjs/plugin/timezone';
 import advanced from 'dayjs/plugin/advancedFormat';
-import { LanguagesEnum, ReviewOrderTypeEnum } from '@prisma/client';
+import {
+  LanguagesEnum,
+  ListingEventsTypeEnum,
+  ReviewOrderTypeEnum,
+} from '@prisma/client';
 import { JurisdictionService } from './jurisdiction.service';
-import { SendGridService } from './sendgrid.service';
+import {
+  EmailProvider,
+  SendEmailInput,
+  EmailAttachmentData,
+} from './email-provider.service';
 import { TranslationService } from './translation.service';
 import { Application } from '../dtos/applications/application.dto';
-import { ApplicationCreate } from '../dtos/applications/application-create.dto';
 import { Jurisdiction } from '../dtos/jurisdictions/jurisdiction.dto';
 import { Listing } from '../dtos/listings/listing.dto';
 import { IdDTO } from '../dtos/shared/id.dto';
@@ -22,15 +27,17 @@ import { User } from '../dtos/users/user.dto';
 import { FeatureFlagEnum } from '../enums/feature-flags/feature-flags-enum';
 import { doJurisdictionHaveFeatureFlagSet } from '../utilities/feature-flag-utilities';
 import { getPublicEmailURL } from '../utilities/get-public-email-url';
+import type { ApplicationStatusChangeItem } from '../utilities/applicationStatusChanges';
+import {
+  ListingUnitsSummary,
+  oneLineAddress,
+  summarizeListingUnitsByType,
+} from '../utilities/listing-data-formatters';
+import { unitTypeMapping } from '../../prisma/seed-helpers/unit-type-factory';
+import { UnitAccessibilityPriorityTypeEnum } from '../enums/units/accessibility-priority-type-enum';
 dayjs.extend(utc);
 dayjs.extend(tz);
 dayjs.extend(advanced);
-
-type EmailAttachmentData = {
-  data: string;
-  name: string;
-  type: string;
-};
 
 type listingInfo = {
   id: string;
@@ -43,7 +50,7 @@ export class EmailService {
   polyglot: Polyglot;
 
   constructor(
-    private readonly sendGrid: SendGridService,
+    private readonly emailProvider: EmailProvider,
     private readonly translationService: TranslationService,
     private readonly jurisdictionService: JurisdictionService,
     @Inject(Logger)
@@ -111,43 +118,24 @@ export class EmailService {
     from: string,
     subject: string,
     body: string,
-    retry = 3,
     attachment?: EmailAttachmentData,
   ) {
     const isMultipleRecipients = Array.isArray(to);
-    if (isMultipleRecipients && to.length === 0) return;
-    const emailParams: MailDataRequired = {
+    if (isMultipleRecipients && to.length === 0) {
+      console.warn(
+        'Got email send request with empty array for the "to" field. Doing nothing.',
+      );
+      return;
+    }
+
+    const emailParams: SendEmailInput = {
       to,
       from,
       subject,
-      html: body,
+      body,
+      attachment,
     };
-    if (attachment) {
-      emailParams.attachments = [
-        {
-          content: Buffer.from(attachment.data).toString('base64'),
-          filename: attachment.name,
-          type: attachment.type,
-          disposition: 'attachment',
-        },
-      ];
-    }
-    const handleError = (error) => {
-      if (error instanceof ResponseError) {
-        const { response } = error;
-        const { body: errBody } = response;
-        console.error(
-          `Error sending email to: ${
-            isMultipleRecipients ? to.toString() : to
-          }! Error body:`,
-          errBody,
-        );
-        if (retry > 0) {
-          void this.send(to, from, subject, body, retry - 1);
-        }
-      }
-    };
-    await this.sendGrid.send(emailParams, isMultipleRecipients, handleError);
+    await this.emailProvider.send(emailParams);
   }
 
   // TODO: update this to be memoized based on jurisdiction and language
@@ -349,9 +337,9 @@ export class EmailService {
     listing: Listing,
     application: Application,
     appUrl: string,
+    isAdvocate = false,
   ) {
     const jurisdiction = await this.getJurisdiction([listing.jurisdictions]);
-    void (await this.loadTranslations(jurisdiction, application.language));
     const enableUnitGroups = doJurisdictionHaveFeatureFlagSet(
       jurisdiction,
       FeatureFlagEnum.enableUnitGroups,
@@ -359,101 +347,310 @@ export class EmailService {
     const listingUrl = `${appUrl}/listing/${listing.id}`;
     const compiledTemplate = this.template('confirmation');
 
-    let eligibleText: string = null;
-    let preferenceText: string = null;
-    let contactText: string = null;
-    if (enableUnitGroups) {
-      const hasUnitGroups = listing.unitGroups?.length > 0;
-      const unitsAvailable =
-        listing.unitGroups?.length > 0
-          ? listing.unitGroups.reduce(
-              (acc, curr) => acc + curr.totalAvailable,
-              0,
-            )
-          : listing.unitsAvailable;
+    const buildEligibilityCopy = (
+      isAdvocate = false,
+      isAdvocateClient = false,
+    ) => {
+      let eligibleText: string = null;
+      let preferenceText: string = null;
+      let contactText: string = null;
+      const waitlistContactKey =
+        isAdvocate && !isAdvocateClient
+          ? 'confirmation.eligible.waitlistContactAdvocate'
+          : 'confirmation.eligible.waitlistContact';
 
-      if (listing.reviewOrderType === ReviewOrderTypeEnum.lottery) {
-        eligibleText = this.polyglot.t('confirmation.eligible.lottery');
-        preferenceText = this.polyglot.t(
-          'confirmation.eligible.lotteryPreference',
-        );
-      } else if (unitsAvailable) {
-        eligibleText = this.polyglot.t('confirmation.eligible.fcfs');
-        preferenceText = this.polyglot.t(
-          'confirmation.eligible.fcfsPreference',
-        );
-      } else if (hasUnitGroups) {
+      if (enableUnitGroups) {
+        const hasUnitGroups = listing.unitGroups?.length > 0;
+        const unitsAvailable =
+          listing.unitGroups?.length > 0
+            ? listing.unitGroups.reduce(
+                (acc, curr) => acc + curr.totalAvailable,
+                0,
+              )
+            : listing.unitsAvailable;
+
+        if (listing.reviewOrderType === ReviewOrderTypeEnum.lottery) {
+          eligibleText = this.polyglot.t('confirmation.eligible.lottery');
+          preferenceText = this.polyglot.t(
+            'confirmation.eligible.lotteryPreference',
+          );
+        } else if (unitsAvailable) {
+          eligibleText = this.polyglot.t('confirmation.eligible.fcfs');
+          preferenceText = this.polyglot.t(
+            'confirmation.eligible.fcfsPreference',
+          );
+        } else if (hasUnitGroups) {
+          if (listing.reviewOrderType === ReviewOrderTypeEnum.waitlistLottery) {
+            eligibleText = this.polyglot.t(
+              'confirmation.eligible.waitlistLottery',
+            );
+          } else {
+            eligibleText = this.polyglot.t('confirmation.eligible.waitlist');
+          }
+          contactText = this.polyglot.t(waitlistContactKey);
+          preferenceText = this.polyglot.t(
+            'confirmation.eligible.waitlistPreference',
+          );
+        }
+      } else {
+        if (
+          listing.reviewOrderType === ReviewOrderTypeEnum.firstComeFirstServe
+        ) {
+          eligibleText = this.polyglot.t('confirmation.eligible.fcfs');
+          preferenceText = this.polyglot.t(
+            'confirmation.eligible.fcfsPreference',
+          );
+        }
+        if (listing.reviewOrderType === ReviewOrderTypeEnum.lottery) {
+          eligibleText = this.polyglot.t('confirmation.eligible.lottery');
+          preferenceText = this.polyglot.t(
+            'confirmation.eligible.lotteryPreference',
+          );
+        }
+        if (listing.reviewOrderType === ReviewOrderTypeEnum.waitlist) {
+          eligibleText = this.polyglot.t('confirmation.eligible.waitlist');
+          contactText = this.polyglot.t(waitlistContactKey);
+          preferenceText = this.polyglot.t(
+            'confirmation.eligible.waitlistPreference',
+          );
+        }
         if (listing.reviewOrderType === ReviewOrderTypeEnum.waitlistLottery) {
           eligibleText = this.polyglot.t(
             'confirmation.eligible.waitlistLottery',
           );
-        } else {
-          eligibleText = this.polyglot.t('confirmation.eligible.waitlist');
+          contactText = this.polyglot.t(waitlistContactKey);
+          preferenceText = this.polyglot.t(
+            'confirmation.eligible.waitlistPreference',
+          );
         }
-        contactText = this.polyglot.t('confirmation.eligible.waitlistContact');
-        preferenceText = this.polyglot.t(
-          'confirmation.eligible.waitlistPreference',
-        );
       }
-    } else {
-      if (listing.reviewOrderType === ReviewOrderTypeEnum.firstComeFirstServe) {
-        eligibleText = this.polyglot.t('confirmation.eligible.fcfs');
-        preferenceText = this.polyglot.t(
-          'confirmation.eligible.fcfsPreference',
-        );
-      }
-      if (listing.reviewOrderType === ReviewOrderTypeEnum.lottery) {
-        eligibleText = this.polyglot.t('confirmation.eligible.lottery');
-        preferenceText = this.polyglot.t(
-          'confirmation.eligible.lotteryPreference',
-        );
-      }
-      if (listing.reviewOrderType === ReviewOrderTypeEnum.waitlist) {
-        eligibleText = this.polyglot.t('confirmation.eligible.waitlist');
-        contactText = this.polyglot.t('confirmation.eligible.waitlistContact');
-        preferenceText = this.polyglot.t(
-          'confirmation.eligible.waitlistPreference',
-        );
-      }
-      if (listing.reviewOrderType === ReviewOrderTypeEnum.waitlistLottery) {
-        eligibleText = this.polyglot.t('confirmation.eligible.waitlistLottery');
-        contactText = this.polyglot.t('confirmation.eligible.waitlistContact');
-        preferenceText = this.polyglot.t(
-          'confirmation.eligible.waitlistPreference',
-        );
-      }
-    }
+
+      return {
+        eligibleText,
+        preferenceText,
+        contactText,
+      };
+    };
 
     const user = {
       firstName: application.applicant.firstName,
       middleName: application.applicant.middleName,
       lastName: application.applicant.lastName,
     };
+    const sendConfirmationEmail = async (
+      recipientEmail: string,
+      language?: LanguagesEnum,
+      isAdvocate = false,
+      isAdvocateClient = false,
+    ) => {
+      await this.loadTranslations(jurisdiction, language);
+      const { eligibleText, preferenceText, contactText } =
+        buildEligibilityCopy(isAdvocate, isAdvocateClient);
+      const nextStepsUrl = this.polyglot.t('confirmation.nextStepsUrl');
 
-    const nextStepsUrl = this.polyglot.t('confirmation.nextStepsUrl');
+      await this.send(
+        recipientEmail,
+        jurisdiction.emailFromAddress,
+        this.polyglot.t('confirmation.subject'),
+        compiledTemplate({
+          subject: this.polyglot.t('confirmation.subject'),
+          header: {
+            logoTitle: this.polyglot.t('header.logoTitle'),
+            logoUrl: this.polyglot.t('header.logoUrl'),
+          },
+          listing,
+          listingUrl,
+          application,
+          preferenceText,
+          interviewText: this.polyglot.t(
+            isAdvocate && !isAdvocateClient
+              ? 'confirmation.interviewAdvocate'
+              : 'confirmation.interview',
+          ),
+          eligibleText,
+          contactText,
+          nextStepsUrl:
+            nextStepsUrl != 'confirmation.nextStepsUrl' ? nextStepsUrl : null,
+          contactSectionHeader: this.polyglot.t(
+            isAdvocateClient
+              ? 'confirmation.questions'
+              : 'confirmation.needToMakeUpdates',
+          ),
+          contactSectionBody: this.polyglot.t(
+            isAdvocateClient
+              ? 'leasingAgent.contactAgentForQuestions'
+              : 'leasingAgent.contactAgentToUpdateInfo',
+          ),
+          introText: this.polyglot.t(
+            isAdvocateClient
+              ? 'confirmation.gotYourConfirmationNumberOnYourBehalf'
+              : 'confirmation.gotYourConfirmationNumber',
+          ),
+          user,
+        }),
+      );
+    };
 
-    await this.send(
-      application.applicant.emailAddress,
-      jurisdiction.emailFromAddress,
-      this.polyglot.t('confirmation.subject'),
-      compiledTemplate({
-        subject: this.polyglot.t('confirmation.subject'),
-        header: {
-          logoTitle: this.polyglot.t('header.logoTitle'),
-          logoUrl: this.polyglot.t('header.logoUrl'),
-        },
-        listing,
-        listingUrl,
-        application,
-        preferenceText,
-        interviewText: this.polyglot.t('confirmation.interview'),
-        eligibleText,
-        contactText,
-        nextStepsUrl:
-          nextStepsUrl != 'confirmation.nextStepsUrl' ? nextStepsUrl : null,
-        user,
-      }),
+    const applicantEmail = application?.applicant?.emailAddress;
+
+    if (isAdvocate) {
+      const advocateEmail = application?.alternateContact?.emailAddress;
+      await sendConfirmationEmail(
+        advocateEmail,
+        application.language,
+        isAdvocate,
+        false,
+      );
+      if (applicantEmail) {
+        await sendConfirmationEmail(
+          applicantEmail,
+          LanguagesEnum.en,
+          isAdvocate,
+          true,
+        );
+      }
+      return;
+    }
+
+    await sendConfirmationEmail(
+      applicantEmail,
+      application.language,
+      isAdvocate,
+      false,
     );
+  }
+
+  public async applicationUpdateEmail(
+    listingName: string,
+    jurisdictionId: IdDTO,
+    application: Application,
+    changes: ApplicationStatusChangeItem[],
+    appUrl: string,
+    isAdvocate = false,
+    advocateEmail?: string,
+  ) {
+    const jurisdiction = await this.getJurisdiction([jurisdictionId]);
+    const contactEmail = process.env.CONTACT_EMAIL;
+    const buildSummaryItems = () =>
+      changes.map((change) => {
+        if (change.type === 'status') {
+          const fromLabel = this.polyglot.t(
+            `applicationUpdate.applicationStatus.${change.from}`,
+          );
+          const toLabel = this.polyglot.t(
+            `applicationUpdate.applicationStatus.${change.to}`,
+          );
+          return new Handlebars.SafeString(
+            this.polyglot.t('applicationUpdate.statusChange', {
+              from: `<strong>${fromLabel}</strong>`,
+              to: `<strong>${toLabel}</strong>`,
+            }),
+          );
+        }
+        if (change.type === 'declineReason') {
+          const reasonLabel = this.polyglot.t(
+            `applicationUpdate.declineReason.${change.value}`,
+          );
+          return new Handlebars.SafeString(
+            this.polyglot.t('applicationUpdate.declineReasonChange', {
+              value: `<strong>${reasonLabel}</strong>`,
+            }),
+          );
+        }
+        if (change.type === 'accessibleWaitlist') {
+          return new Handlebars.SafeString(
+            this.polyglot.t('applicationUpdate.accessibleWaitListChange', {
+              value: `<strong>${change.value}</strong>`,
+            }),
+          );
+        }
+        return new Handlebars.SafeString(
+          this.polyglot.t('applicationUpdate.conventionalWaitListChange', {
+            value: `<strong>${change.value}</strong>`,
+          }),
+        );
+      });
+
+    const subjectForCurrentLanguage = () =>
+      this.polyglot.t('applicationUpdate.subject', {
+        listingName: listingName,
+      });
+    const actionUrl = appUrl ? `${appUrl}/account/applications` : '';
+    const housingApplicantName = [
+      application?.applicant?.firstName,
+      application?.applicant?.lastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const advocateName = [
+      application?.alternateContact?.firstName,
+      application?.alternateContact?.lastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    if (isAdvocate && advocateEmail) {
+      void (await this.loadTranslations(jurisdiction, application.language));
+      await this.send(
+        advocateEmail,
+        jurisdiction.emailFromAddress,
+        subjectForCurrentLanguage(),
+        this.template('application-update')({
+          appOptions: { listingName: listingName },
+          recipientName: advocateName,
+          summaryItems: buildSummaryItems(),
+          actionUrl,
+          contactEmail,
+          updateNoticeText: this.polyglot.t(
+            'applicationUpdate.advocateUpdateNotice',
+            {
+              applicantName: housingApplicantName,
+              listingName: listingName,
+            },
+          ),
+          contactNoticeText: this.polyglot.t('applicationUpdate.contactNotice'),
+          viewPromptText: this.polyglot.t(
+            'applicationUpdate.advocateViewPrompt',
+          ),
+          viewLinkText: this.polyglot.t('applicationUpdate.advocateViewLink'),
+          showViewSection: true,
+        }),
+      );
+    }
+
+    if (application?.applicant?.emailAddress) {
+      void (await this.loadTranslations(
+        jurisdiction,
+        isAdvocate ? LanguagesEnum.en : application.language,
+      ));
+      const applicantName = [
+        application.applicant.firstName,
+        application.applicant.lastName,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      await this.send(
+        application.applicant.emailAddress,
+        jurisdiction.emailFromAddress,
+        subjectForCurrentLanguage(),
+        this.template('application-update')({
+          appOptions: { listingName: listingName },
+          recipientName: applicantName,
+          summaryItems: buildSummaryItems(),
+          contactEmail,
+          updateNoticeText: this.polyglot.t('applicationUpdate.updateNotice', {
+            listingName: listingName,
+          }),
+          contactNoticeText: isAdvocate
+            ? this.polyglot.t('applicationUpdate.applicantContactNotice')
+            : this.polyglot.t('applicationUpdate.contactNotice'),
+          actionUrl,
+          viewPromptText: this.polyglot.t('applicationUpdate.viewPrompt'),
+          viewLinkText: this.polyglot.t('applicationUpdate.viewLink'),
+          showViewSection: !isAdvocate,
+        }),
+      );
+    }
   }
 
   public async requestApproval(
@@ -599,7 +796,6 @@ export class EmailService {
           appUrl: process.env.PARTNERS_PORTAL_URL,
         },
       }),
-      undefined,
       {
         data: csvData,
         name: `users-${this.formatLocalDate(
@@ -733,6 +929,276 @@ export class EmailService {
         signInUrl: signInUrl,
       }),
     );
+  }
+
+  public async advocateAccepted(user: User, appUrl: string, formUrl: string) {
+    const jurisdiction = await this.getJurisdiction(user.jurisdictions);
+    void (await this.loadTranslations(jurisdiction, user.language));
+    const emailFromAddress = await this.getEmailToSendFrom(
+      user.jurisdictions,
+      jurisdiction,
+    );
+    await this.send(
+      user.email,
+      emailFromAddress,
+      this.polyglot.t('advocateApproved.subject'),
+      this.template('advocate-approved')({
+        user: user,
+        formUrl,
+        appOptions: { appUrl },
+      }),
+    );
+  }
+
+  public async advocateRejected(user: User, appUrl: string) {
+    const jurisdiction = await this.getJurisdiction(user.jurisdictions);
+    void (await this.loadTranslations(jurisdiction, user.language));
+    const emailFromAddress = await this.getEmailToSendFrom(
+      user.jurisdictions,
+      jurisdiction,
+    );
+    await this.send(
+      user.email,
+      emailFromAddress,
+      this.polyglot.t('advocateRejected.subject'),
+      this.template('advocate-rejected')({
+        user: user,
+        contactEmail: process.env.CONTACT_EMAIL,
+        appOptions: { appUrl },
+      }),
+    );
+  }
+
+  public buildListingDetails(
+    listing: Listing,
+    priorityTypes: UnitAccessibilityPriorityTypeEnum[],
+    listingUnitsSummary: ListingUnitsSummary,
+  ): { label: string; value: string | number }[] {
+    const listingDetails: { label: string; value: string | number }[] = [];
+
+    if (listing?.reservedCommunityTypes?.name) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.community'),
+        value: this.polyglot.t(
+          `rentalOpportunity.communityType.${listing.reservedCommunityTypes.name}`,
+        ),
+      });
+    }
+
+    if (listing?.applicationDueDate) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.applicationsDue'),
+        value: this.formatLocalDate(
+          listing.applicationDueDate,
+          'MMMM DD, YYYY',
+        ),
+      });
+    }
+
+    listingDetails.push({
+      label: this.polyglot.t('rentalOpportunity.address'),
+      value: oneLineAddress(listing.listingsBuildingAddress),
+    });
+
+    if (listing.neighborhood) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.neighborhood'),
+        value: listing.neighborhood,
+      });
+    }
+
+    if (priorityTypes.length) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.unitType'),
+        value: priorityTypes
+          .map((type) =>
+            this.polyglot.t(`rentalOpportunity.accessibilityType.${type}`),
+          )
+          .join(', '),
+      });
+    }
+
+    if (
+      listing.reviewOrderType &&
+      (listing.reviewOrderType === ReviewOrderTypeEnum.lottery ||
+        listing.reviewOrderType === ReviewOrderTypeEnum.waitlist)
+    ) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.opportunityType'),
+        value: this.polyglot.t(`rentalOpportunity.${listing.reviewOrderType}`),
+      });
+    }
+
+    const unitRowOrder = Object.keys(listingUnitsSummary.units).sort(
+      (a, b) => unitTypeMapping[a] - unitTypeMapping[b],
+    );
+
+    unitRowOrder.forEach((key) => {
+      const { count, baths, sqft } = listingUnitsSummary.units[key];
+      let summaryString = `${this.polyglot.t('rentalOpportunity.unitCount', {
+        smart_count: count,
+      })}`;
+
+      if (baths) {
+        summaryString += `, ${
+          baths.min === baths.max
+            ? this.polyglot.t('rentalOpportunity.bathCount', {
+                smart_count: baths.max,
+              })
+            : `${baths.min} - ${this.polyglot.t('rentalOpportunity.bathCount', {
+                smart_count: baths.max,
+              })}`
+        }`;
+      }
+
+      if (sqft) {
+        summaryString += `, ${
+          sqft.min === sqft.max ? sqft.max : `${sqft.min} - ${sqft.max}`
+        } ${this.polyglot.t('rentalOpportunity.sqft')}`;
+      }
+
+      listingDetails.push({
+        label: this.polyglot.t(`rentalOpportunity.unitTypes.${key}`),
+        value: summaryString,
+      });
+    });
+
+    if (listingUnitsSummary.flatRent || listingUnitsSummary.percentageRent) {
+      let rentSummaryValue = '';
+
+      // If a listing has mixed rent type units, show more generic information
+      if (listingUnitsSummary.flatRent && listingUnitsSummary.percentageRent) {
+        rentSummaryValue = `% ${this.polyglot.t(
+          'rentalOpportunity.ofIncome',
+        )}, ${this.polyglot.t('rentalOpportunity.orUpTo')} $${
+          listingUnitsSummary.flatRent.max
+        }`;
+      }
+      // Otherwise show more specific ranges
+      else if (listingUnitsSummary.flatRent) {
+        rentSummaryValue =
+          listingUnitsSummary.flatRent.max === listingUnitsSummary.flatRent.min
+            ? `$${listingUnitsSummary.flatRent.min} ${this.polyglot.t(
+                'rentalOpportunity.perMonth',
+              )}`
+            : `$${listingUnitsSummary.flatRent.min} - $${
+                listingUnitsSummary.flatRent.max
+              } ${this.polyglot.t('rentalOpportunity.perMonth')}`;
+      } else {
+        rentSummaryValue =
+          listingUnitsSummary.percentageRent.max ===
+          listingUnitsSummary.percentageRent.min
+            ? `${listingUnitsSummary.percentageRent.min}% ${this.polyglot.t(
+                'rentalOpportunity.ofIncome',
+              )}`
+            : `${listingUnitsSummary.percentageRent.min}% - ${
+                listingUnitsSummary.percentageRent.max
+              }% ${this.polyglot.t('rentalOpportunity.ofIncome')}`;
+      }
+
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.rent'),
+        value: rentSummaryValue,
+      });
+    }
+
+    if (listingUnitsSummary.minIncome) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.minIncome'),
+        value: `${
+          listingUnitsSummary.minIncome.min ===
+          listingUnitsSummary.minIncome.max
+            ? `$${listingUnitsSummary.minIncome.max} ${this.polyglot.t(
+                'rentalOpportunity.perMonth',
+              )}`
+            : `$${listingUnitsSummary.minIncome.min} - $${
+                listingUnitsSummary.minIncome.max
+              } ${this.polyglot.t('rentalOpportunity.perMonth')}`
+        }`,
+      });
+    }
+
+    if (listingUnitsSummary.maxIncome) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.maxIncome'),
+        value: `${
+          listingUnitsSummary.maxIncome.min ===
+          listingUnitsSummary.maxIncome.max
+            ? `$${listingUnitsSummary.maxIncome.max} ${this.polyglot.t(
+                'rentalOpportunity.perMonth',
+              )}`
+            : `$${listingUnitsSummary.maxIncome.min} - $${
+                listingUnitsSummary.maxIncome.max
+              } ${this.polyglot.t('rentalOpportunity.perMonth')}`
+        }`,
+      });
+    }
+
+    const lotteryInfo = listing.listingEvents.filter(
+      (event) => event.type === ListingEventsTypeEnum.publicLottery,
+    );
+
+    if (lotteryInfo.length) {
+      listingDetails.push({
+        label: this.polyglot.t('rentalOpportunity.lotteryDate'),
+        value: this.formatLocalDate(lotteryInfo[0].startDate, 'MMMM DD, YYYY'),
+      });
+    }
+    return listingDetails;
+  }
+
+  public async listingPublishNotification(
+    jurisdictionId: IdDTO,
+    listing: Listing,
+    priorityTypes: UnitAccessibilityPriorityTypeEnum[],
+    emails: { [key: string]: string[] },
+  ) {
+    try {
+      const jurisdiction = await this.getJurisdiction([jurisdictionId]);
+      const listingUnitsSummary = summarizeListingUnitsByType(listing.units);
+
+      for (const language in emails) {
+        if (!emails[language].length) {
+          continue;
+        }
+
+        void (await this.loadTranslations(
+          jurisdiction,
+          language as LanguagesEnum,
+        ));
+
+        this.logger.log(
+          `Sending lottery published ${language} email for listing ${listing.name} to ${emails[language]?.length} emails`,
+        );
+
+        const listingDetails = this.buildListingDetails(
+          listing,
+          priorityTypes,
+          listingUnitsSummary,
+        );
+
+        const emailButtons = jurisdiction.languages.map((code) => ({
+          name: this.polyglot.t(`rentalOpportunity.viewButton.${code}`),
+          url: `${jurisdiction.publicUrl}/${code}/listing/${listing.id}/${listing.urlSlug}`,
+        }));
+
+        await this.send(
+          emails[language],
+          jurisdiction.emailFromAddress,
+          this.polyglot.t(`rentalOpportunity.subject`, {
+            listingName: listing.name,
+          }),
+          this.template('listing-opportunity')({
+            listingName: listing.name,
+            tableRows: listingDetails,
+            languageUrls: emailButtons,
+          }),
+        );
+      }
+    } catch (err) {
+      console.log('listing approval email failed', err);
+      throw new HttpException('email failed', 500);
+    }
   }
 
   formatLocalDate(rawDate: string | Date, format: string): string {
