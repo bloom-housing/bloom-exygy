@@ -32,7 +32,7 @@ provider "aws" {
 }
 
 module "deployer_permission_set" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployer_permission_set_policy?ref=bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployer_permission_set_policy?ref=bc35f8315f67aa8a767f51b8082763ff81c0788b"
 
   iam_identity_center_instance_arn = local.iam_identity_center_instance_arn
   permission_set_arn               = local.deployer_permission_set_arn

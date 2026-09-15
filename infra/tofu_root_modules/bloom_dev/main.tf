@@ -62,7 +62,7 @@ output "certificate_details" {
 
 # Deploy bloom into the account.
 module "bloom_deployment" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=bc35f8315f67aa8a767f51b8082763ff81c0788b"
 
   aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
@@ -83,26 +83,26 @@ module "bloom_deployment" {
   env_type          = "dev"
   high_availability = false
 
-  #vpc_peering_settings = {
+  #vpc_peering_settings = {bc35f8315f67aa8a767f51b8082763ff81c0788b
   #  aws_account_number        = 206362095778            # bloom-dev-exising-db-account
   #  vpc_id                    = "vpc-03abaa897db701e41" # default in us-west-2
   #  allowed_security_group_id = "sg-01babe8cf3bc017c2"  # default
   #  allowed_cidr_range        = "172.31.0.0/16"         # default
   #}
 
-  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
-  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-bc35f8315f67aa8a767f51b8082763ff81c0788b"
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-bc35f8315f67aa8a767f51b8082763ff81c0788b"
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-bc35f8315f67aa8a767f51b8082763ff81c0788b"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-bc35f8315f67aa8a767f51b8082763ff81c0788b"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-bc35f8315f67aa8a767f51b8082763ff81c0788b"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME = "Bloomington"
     LANGUAGES         = "en,es,zh,vi,tl,ko,hy"
     RTL_LANGUAGES     = "ar,fa"
   }
 
-  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-bc35f8315f67aa8a767f51b8082763ff81c0788b"
   grafana_editor_group_ids = [
     "f49854e8-4081-7033-9fd0-290a48f1a15a" # bloom-dev-deployers
   ]

@@ -169,7 +169,7 @@ services:
       SHOW_PUBLIC_LOTTERY: "TRUE"
       SHOW_MANDATED_ACCOUNTS: "FALSE"
       SHOW_PWDLESS: "FALSE"
-      SHOW_NEW_SEEDS_DESIGNS: "FALSE"
+      SHOW_NEW_SEEDS_DESIGNS: "TRUE"
     depends_on:
       dbseed: # wait for the db to have data so next build works correctly
         condition: service_completed_successfully
