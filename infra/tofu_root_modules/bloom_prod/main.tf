@@ -62,7 +62,7 @@ output "certificate_details" {
 
 # Deploy bloom into the account.
 module "bloom_deployment" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=bc35f8315f67aa8a767f51b8082763ff81c0788b"
 
   aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
@@ -119,7 +119,7 @@ module "bloom_deployment" {
     SHOW_NEW_SEEDS_DESIGNS = "TRUE"
   }
 
-  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-bd69afe49ab8499263ed7ba6e0ee6da64fe4cccc"
+  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-bc35f8315f67aa8a767f51b8082763ff81c0788b"
   grafana_editor_group_ids = [
     "b4680488-f001-70d7-ffc0-306719591374" # bloom-prodlike-deployers
   ]

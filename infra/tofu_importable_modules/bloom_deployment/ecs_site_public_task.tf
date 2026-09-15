@@ -12,7 +12,7 @@ locals {
     SHOW_PUBLIC_LOTTERY           = "TRUE"
     SHOW_MANDATED_ACCOUNTS        = "FALSE"
     SHOW_PWDLESS                  = "FALSE"
-    SHOW_NEW_SEEDS_DESIGNS        = "FALSE"
+    SHOW_NEW_SEEDS_DESIGNS        = "TRUE"
   }
 }
 resource "aws_ecs_task_definition" "bloom_site_public" {
