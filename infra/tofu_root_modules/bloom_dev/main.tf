@@ -92,7 +92,7 @@ module "bloom_deployment" {
   #}
 
   bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
-  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-b298f11d43277bc26ccc02125b289918b2e764dcd2d2626082b60cd4af5ccada014d0c4c3843b4c2"
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
 
   bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
   bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
