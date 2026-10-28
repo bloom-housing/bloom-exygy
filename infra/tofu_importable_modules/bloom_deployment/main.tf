@@ -201,10 +201,7 @@ variable "bloom_api_task_count" {
   type        = number
   default     = null
 }
-variable "bloom_dbseed_image" {
-  type        = string
-  description = "Container image for the Bloom dbseed image."
-}
+
 variable "apply_seed" {
   type        = string
   description = "When true, deploy the dbseed container to facilitate Bloom database seeding."
