@@ -63,7 +63,7 @@ output "certificate_details" {
 
 # Deploy bloom into the account.
 module "bloom_deployment" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=f11d43277bc26ccc02125b289918b2e764dcd2d2"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=e0babccde55b009ad2d1dd3c47051b3613644fb1"
 
   aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
@@ -91,19 +91,19 @@ module "bloom_deployment" {
   #  allowed_cidr_range        = "172.31.0.0/16"         # default
   #}
 
-  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
-  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME = "Bloomington"
     LANGUAGES         = "en,es,zh,vi,tl,ko,hy"
     RTL_LANGUAGES     = "ar,fa"
   }
 
-  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
+  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
   grafana_editor_group_ids = [
     "f49854e8-4081-7033-9fd0-290a48f1a15a" # bloom-dev-deployers
   ]
