@@ -1,9 +1,12 @@
 locals {
   site_partners_default_env_vars = {
-    NODE_ENV         = "production"
-    NEXTJS_PORT      = "3001"
-    BACKEND_API_BASE = "http://bloom-api:3100"
-    LISTINGS_QUERY   = "/listings"
+    NODE_ENV                    = "production"
+    DISABLE_NEXT_TYPECHECK      = "TRUE"
+    NEXTJS_PORT                 = "3001"
+    BACKEND_API_BASE            = "http://bloom-api:3100"
+    LISTINGS_QUERY              = "/listings"
+    USE_SECURE_DOWNLOAD_PATHWAY = "TRUE"
+    USE_S3_FILE_STORAGE         = "TRUE"
   }
 }
 resource "aws_ecs_task_definition" "bloom_site_partners" {
@@ -19,15 +22,21 @@ resource "aws_ecs_task_definition" "bloom_site_partners" {
   execution_role_arn = aws_iam_role.bloom_ecs["site-partners"].arn
   task_role_arn      = aws_iam_role.bloom_container["site-partners"].arn
 
-  # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
-  cpu    = 2048     # 2 vCPU
-  memory = 4 * 1024 # 4 GiB in MiB
+  cpu    = var.bloom_site_partners_resource_limits.vcpu
+  memory = var.bloom_site_partners_resource_limits.memory_mib
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       Name        = "bloom-site-partners"
+      essential   = true
       image       = var.bloom_site_partners_image
       environment = [for k, v in merge(local.site_partners_default_env_vars, var.bloom_site_partners_env_vars) : { name = k, value = v }]
+      secrets = [
+        {
+          name      = "MAPBOX_TOKEN",
+          valueFrom = aws_secretsmanager_secret.mapbox_api_key.arn
+        }
+      ]
       portMappings = [
         {
           containerPort = 3001
@@ -47,12 +56,15 @@ resource "aws_ecs_task_definition" "bloom_site_partners" {
         }
       }
     }
-  ])
+    ],
+    local.otel_sidecar_container
+  ))
 }
 resource "aws_ecs_service" "bloom_site_partners" {
   depends_on = [
     aws_ecs_service.bloom_api,
     aws_route_table_association.private_subnet,
+    null_resource.bloom_dbseed_run,
   ]
   region                = var.aws_region
   cluster               = aws_ecs_cluster.bloom.arn
@@ -62,7 +74,7 @@ resource "aws_ecs_service" "bloom_site_partners" {
   wait_for_steady_state = true
 
   network_configuration {
-    security_groups  = [aws_security_group.site_partners.id]
+    security_groups  = [aws_security_group.bloom["site-partners"].id]
     subnets          = [for s in aws_subnet.private : s.id]
     assign_public_ip = false
   }

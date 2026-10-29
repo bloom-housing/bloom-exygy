@@ -1,18 +1,20 @@
 locals {
   site_public_default_env_vars = {
     NODE_ENV                      = "production"
+    DISABLE_NEXT_TYPECHECK        = "TRUE"
     NEXTJS_PORT                   = "3000"
     BACKEND_API_BASE              = "http://bloom-api:3100"
     BACKEND_API_BASE_NEW          = "http://bloom-api:3100"
     LISTINGS_QUERY                = "/listings"
     MAX_BROWSE_LISTINGS           = "10"
     HOUSING_COUNSELOR_SERVICE_URL = "/get-assistance"
-    IDLE_TIMEMOUT                 = "5"  # seconds
+    IDLE_TIMEOUT                  = "5"  # seconds
     CACHE_REVALIDATE              = "30" # seconds
     SHOW_PUBLIC_LOTTERY           = "TRUE"
     SHOW_MANDATED_ACCOUNTS        = "FALSE"
     SHOW_PWDLESS                  = "FALSE"
-    SHOW_NEW_SEEDS_DESIGNS        = "FALSE"
+    SHOW_NEW_SEEDS_DESIGNS        = "TRUE"
+    NON_PROD_BANNER               = "FALSE"
   }
 }
 resource "aws_ecs_task_definition" "bloom_site_public" {
@@ -28,15 +30,21 @@ resource "aws_ecs_task_definition" "bloom_site_public" {
   execution_role_arn = aws_iam_role.bloom_ecs["site-public"].arn
   task_role_arn      = aws_iam_role.bloom_container["site-public"].arn
 
-  # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
-  cpu    = 2048     # 2 vCPU
-  memory = 6 * 1024 # 6 GiB in MiB
+  cpu    = var.bloom_site_public_resource_limits.vcpu
+  memory = var.bloom_site_public_resource_limits.memory_mib
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       Name        = "bloom-site-public"
+      essential   = true
       image       = var.bloom_site_public_image
       environment = [for k, v in merge(local.site_public_default_env_vars, var.bloom_site_public_env_vars) : { name = k, value = v }]
+      secrets = [
+        {
+          name      = "MAPBOX_TOKEN",
+          valueFrom = aws_secretsmanager_secret.mapbox_api_key.arn
+        }
+      ]
       portMappings = [
         {
           containerPort = 3000
@@ -56,12 +64,15 @@ resource "aws_ecs_task_definition" "bloom_site_public" {
         }
       }
     }
-  ])
+    ],
+    local.otel_sidecar_container
+  ))
 }
 resource "aws_ecs_service" "bloom_site_public" {
   depends_on = [
     aws_ecs_service.bloom_api,
     aws_route_table_association.private_subnet,
+    null_resource.bloom_dbseed_run,
   ]
   region                = var.aws_region
   cluster               = aws_ecs_cluster.bloom.arn
@@ -71,7 +82,7 @@ resource "aws_ecs_service" "bloom_site_public" {
   wait_for_steady_state = true
 
   network_configuration {
-    security_groups  = [aws_security_group.site_public.id]
+    security_groups  = [aws_security_group.bloom["site-public"].id]
     subnets          = [for s in aws_subnet.private : s.id]
     assign_public_ip = false
   }
