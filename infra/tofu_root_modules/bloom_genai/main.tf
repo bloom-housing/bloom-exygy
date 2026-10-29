@@ -72,12 +72,12 @@ module "bloom_deployment" {
   env_type          = "dev"
   high_availability = false
 
-  apply_seed = var.bloom_apply_seed
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
-  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME     = "Doorway Data Explorer Test"
     CLOUDINARY_CLOUD_NAME = "exygy"
@@ -87,7 +87,13 @@ module "bloom_deployment" {
   bloom_api_env_vars = {
     FAST_API_URL = "http://data-explorer-backend:8000"
   }
-  bloom_api_fast_api_key_secret_arn = module.data_explorer_backend.api_key_secret_arn
+
+  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  grafana_editor_group_ids = [
+    "f49854e8-4081-7033-9fd0-290a48f1a15a" # bloom-dev-deployers
+  ]
+
+  observability_collection_enabled = false
 }
 output "aws_lb_dns_name" {
   value       = module.bloom_deployment.lb_dns_name
