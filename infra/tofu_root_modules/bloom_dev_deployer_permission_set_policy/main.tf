@@ -1,16 +1,13 @@
-terraform {
-  backend "s3" {
-    profile      = local.sso_profile_id
-    region       = local.tofu_state_bucket_region
-    bucket       = local.tofu_state_bucket_name
-    key          = "${local.tofu_state_key_prefix}/state"
-    use_lockfile = true
-  }
-}
+
 
 locals {
   bloom_deployment = "bloom-dev"
   sso_profile_id   = "${local.bloom_deployment}-iam-admin"
+
+  # Profile with IAM permissions in the bloom deployment account, used to create the customer managed
+  # policies the permission set references. Change this if bloom-dev-iam-admin is not a profile for
+  # the deployment account.
+  deployment_account_sso_profile_id = local.sso_profile_id
 
   tofu_state_bucket_region = "us-east-1"
   tofu_state_bucket_name   = "bloom-core-tofu-state-files"
@@ -26,13 +23,15 @@ locals {
   bloom_deployment_tofu_state_file_prefix = local.bloom_deployment
 }
 
-provider "aws" {
-  profile = local.sso_profile_id
-  region  = local.iam_identity_center_region
-}
+
 
 module "deployer_permission_set" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployer_permission_set_policy?ref=e0babccde55b009ad2d1dd3c47051b3613644fb1"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployer_permission_set_policy?ref=d39861e4c7f82888a5f1331c9d4577c060e5ca43"
+
+  providers = {
+    aws                    = aws
+    aws.deployment_account = aws.deployment_account
+  }
 
   iam_identity_center_instance_arn = local.iam_identity_center_instance_arn
   permission_set_arn               = local.deployer_permission_set_arn
@@ -42,3 +41,4 @@ module "deployer_permission_set" {
   bloom_deployment_tofu_state_bucket_name = local.bloom_deployment_tofu_state_bucket_name
   bloom_deployment_tofu_state_file_prefix = local.bloom_deployment_tofu_state_file_prefix
 }
+
