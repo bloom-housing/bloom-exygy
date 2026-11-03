@@ -1,0 +1,39 @@
+name: AWS Prod Deployment
+
+on:
+  repository_dispatch:
+    types: [main-updated]
+  workflow_dispatch:  # manual trigger
+    inputs:
+      tfpath: ./infra/tofu_root_modules/bloom_prod
+
+jobs:
+  tf_code_check:
+    name: Terraform Validation and Build
+    runs-on: ubuntu-latest
+
+    if : ${{ inputs.tfpath }}
+    steps:
+    - uses: actions/checkout@v2.5.0
+      with:
+        repository: bloom-housing/bloom
+        path: './bloom'
+
+    - name: Configure AWS Credentials Action for GitHub actions
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.PROD_DEPLOYER_AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.PROD_DEPLOYER_AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+    - name: Terraform Init, Plan, And Apply
+      run: |
+        echo `pwd`
+        echo "tfpath ${{ github.event.inputs.tfpath }}"
+        echo "** Running Terraform Init **"
+        terraform init
+
+        echo "** Running Terraform Validate **"
+        terraform validate
+
+        echo "** Running Terraform Plan **"
+        terraform plan -var git_sha=${{ github.event.client_payload.sha }}
