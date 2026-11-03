@@ -62,7 +62,7 @@ output "certificate_details" {
 
 # Deploy bloom into the account.
 module "bloom_deployment" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=f11d43277bc26ccc02125b289918b2e764dcd2d2"
+  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=main"
 
   aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
@@ -89,10 +89,10 @@ module "bloom_deployment" {
   #  allowed_cidr_range        = "172.31.0.0/16"         # default
   #}
 
-  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom-la/dbinit:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_dbinit_image      = "ghcr.io/bloom-housing/bloom-la/dbinit:gitsha-${var.git_sha}"
   bloom_dbinit_run_number = 2
 
-  bloom_api_image = "ghcr.io/bloom-housing/bloom-la/api:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_api_image = "ghcr.io/bloom-housing/bloom-la/api:gitsha-${var.git_sha}"
   bloom_api_env_vars = {
     AUTH_LOCK_LOGIN_AFTER_FAILED_ATTEMPTS = "5"
     AUTH_LOCK_LOGIN_COOLDOWN              = "1800000"
@@ -103,14 +103,14 @@ module "bloom_deployment" {
     THROTTLE_TTL                          = "180000"
     TIME_ZONE                             = "America/Los_Angeles"
   }
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom-la/partners:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom-la/partners:gitsha-${var.git_sha}"
   bloom_site_partners_env_vars = {
     APPLICATION_EXPORT_AS_SPREADSHEET = "TRUE"
     SHOW_DUPLICATES                   = "TRUE"
     SHOW_LOTTERY                      = "FALSE"
     SHOW_SMS_MFA                      = "FALSE"
   }
-  bloom_site_public_image = "ghcr.io/bloom-housing/bloom-la/public:gitsha-500b98b8db4072df2397e336510438a268c47f20"
+  bloom_site_public_image = "ghcr.io/bloom-housing/bloom-la/public:gitsha-${var.git_sha}"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME      = "Los Angeles"
     LANGUAGES              = "en,es,zh,vi,tl,ko,hy,fa"
@@ -119,7 +119,7 @@ module "bloom_deployment" {
     SHOW_NEW_SEEDS_DESIGNS = "TRUE"
   }
 
-  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-f11d43277bc26ccc02125b289918b2e764dcd2d2"
+  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-${var.git_sha}"
   grafana_editor_group_ids = [
     "b4680488-f001-70d7-ffc0-306719591374" # bloom-prodlike-deployers
   ]

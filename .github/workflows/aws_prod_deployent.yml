@@ -1,0 +1,9 @@
+name: AWS Prod Deployment
+
+on:
+  repository_dispatch:
+    types: [main-updated]
+
+jobs:
+  deploy:
+    
