@@ -4,8 +4,6 @@ on:
   repository_dispatch:
     types: [main-updated]
   workflow_dispatch:  # manual trigger
-    inputs:
-      tfpath: ./infra/tofu_root_modules/bloom_prod
 
 jobs:
   tf_code_check:
@@ -28,7 +26,7 @@ jobs:
     - name: Terraform Init, Plan, And Apply
       run: |
         echo `pwd`
-        echo "tfpath ${{ github.event.inputs.tfpath }}"
+        echo "tfpath ./infra/tofu_root_modules/bloom_prod"
         echo "** Running Terraform Init **"
         terraform init
 
