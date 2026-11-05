@@ -16,7 +16,7 @@ terraform {
 
 locals {
   bloom_deployment = "bloom-prod"
-  sso_profile_id   = "${local.bloom_deployment}-deployer"
+  sso_profile_id   = "966936071156_bloom-prod-deployer"
 
   tofu_state_bucket_region = "us-east-1"
   tofu_state_bucket_name   = "bloom-core-tofu-state-files"
@@ -31,6 +31,7 @@ provider "aws" {
   profile = local.sso_profile_id
   region  = local.bloom_aws_region
 }
+
 
 # Create and validate a certificate for bloom_deployment module to deploy successfully. See the
 # README.md for more details for how to deploy and validate the certificate before deploying the

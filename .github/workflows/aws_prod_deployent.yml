@@ -5,11 +5,11 @@ on:
     types: [main-updated]
   workflow_dispatch:  # manual trigger
     inputs:
-      tfpath: ./infra/tofu_root_modules/bloom_prod
+      tfpath: 
 
 jobs:
   tf_code_check:
-    name: Terraform Validation and Build
+    name: Tofu Validation and Build
     runs-on: ubuntu-latest
 
     if : ${{ inputs.tfpath }}
