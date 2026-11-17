@@ -92,6 +92,7 @@ resource "aws_ecs_task_definition" "bloom_api" {
     local.otel_sidecar_container
   ))
 }
+
 resource "aws_ecs_service" "bloom_api" {
   depends_on = [
     aws_db_instance.bloom,

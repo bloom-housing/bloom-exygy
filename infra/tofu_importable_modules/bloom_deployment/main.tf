@@ -13,3 +13,15 @@ resource "aws_cloudtrail_event_data_store" "audit" {
   retention_period               = 30
   termination_protection_enabled = true
 }
+
+module "alb" {
+  source = "./alb"
+
+  aws_certificate_arn    = var.aws_certificate_arn
+  aws_vpc_id             = aws_vpc.bloom.id
+  aws_public_subnet_ids  = [for s in aws_subnet.public : s.id]
+  aws_security_group_ids = [aws_security_group.bloom["lb"].id]
+
+  aws_region  = var.aws_region
+  domain_name = var.domain_name
+}
