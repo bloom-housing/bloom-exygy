@@ -63,7 +63,8 @@ output "certificate_details" {
 
 # Deploy bloom into the account.
 module "bloom_deployment" {
-  source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=3de29045580ba129a7cee4030085e64edaa539de"
+  # source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=3de29045580ba129a7cee4030085e64edaa539de"
+  source = "../../tofu_importable_modules/bloom_deployment"
 
   aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
@@ -96,7 +97,7 @@ module "bloom_deployment" {
     public_service_min_tasks = 1
     public_service_max_tasks = 2
   }
-  
+
   db_high_availability = false
 
   #vpc_peering_settings = {
