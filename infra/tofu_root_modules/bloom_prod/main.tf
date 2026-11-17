@@ -80,6 +80,7 @@ module "bloom_deployment" {
     iam_user   = "bloom-translate@bloom-320514.iam.gserviceaccount.com"
   }
 
+  env_type = "production"
   service_task_autoscaling_config = {
     cpu_target    = 50
     memory_target = 50
