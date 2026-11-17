@@ -97,7 +97,6 @@ module "bloom_deployment" {
     public_service_min_tasks = 1
     public_service_max_tasks = 2
   }
-
   db_high_availability = false
 
   #vpc_peering_settings = {
