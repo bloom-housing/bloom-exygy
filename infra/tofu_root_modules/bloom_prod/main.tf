@@ -79,8 +79,21 @@ module "bloom_deployment" {
     iam_user   = "bloom-translate@bloom-320514.iam.gserviceaccount.com"
   }
 
-  env_type          = "production"
-  high_availability = true
+  env_type = "production"
+  service_task_autoscaling_config = {
+    cpu_target    = 50
+    memory_target = 50
+
+    api_service_min_tasks = 1
+    api_service_max_tasks = 2
+
+    partners_service_min_tasks = 1
+    partners_service_max_tasks = 2
+
+    public_service_min_tasks = 1
+    public_service_max_tasks = 2
+  }
+  db_high_availability = false
 
   #vpc_peering_settings = {
   #  aws_account_number        = 206362095778            # bloom-dev-exising-db-account
