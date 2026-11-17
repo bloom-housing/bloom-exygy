@@ -6,7 +6,6 @@ variable "aws_certificate_arn" {
 variable "aws_region" { # TODO move validations into top level module
   type        = string
   description = "Region to deploy AWS resources to"
-
   validation {
     condition = (
       var.aws_region == "us-east-1" ||
