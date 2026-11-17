@@ -69,15 +69,28 @@ module "bloom_deployment" {
   domain_name         = aws_acm_certificate.bloom.domain_name
   aws_certificate_arn = aws_acm_certificate.bloom.arn
 
-  env_type          = "dev"
-  high_availability = false
+  env_type = "dev"
+  service_task_autoscaling_config = {
+    cpu_target    = 50
+    memory_target = 50
 
-  apply_seed = var.bloom_apply_seed
+    api_service_min_tasks = 1
+    api_service_max_tasks = 2
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
-  bloom_dbseed_image        = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-3b8adf50746fca41393bae9072f802f6e19b44e2"
+    partners_service_min_tasks = 1
+    partners_service_max_tasks = 2
+
+    public_service_min_tasks = 1
+    public_service_max_tasks = 2
+  }
+  db_high_availability = false
+
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME     = "Doorway Data Explorer Test"
     CLOUDINARY_CLOUD_NAME = "exygy"
@@ -87,8 +100,12 @@ module "bloom_deployment" {
   bloom_api_env_vars = {
     FAST_API_URL = "http://data-explorer-backend:8000"
   }
-  bloom_api_fast_api_key_secret_arn = module.data_explorer_backend.api_key_secret_arn
+
+  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+
+  observability_collection_enabled = false
 }
+
 output "aws_lb_dns_name" {
   value       = module.bloom_deployment.lb_dns_name
   description = "DNS name of the load balancer."
