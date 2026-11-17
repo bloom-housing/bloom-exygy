@@ -139,7 +139,7 @@ resource "aws_ecs_service" "bloom_site_partners" {
 resource "aws_appautoscaling_target" "bloom_site_partners_autoscaling_target" {
   max_capacity       = var.service_task_autoscaling_config.partners_service_max_tasks
   min_capacity       = var.service_task_autoscaling_config.partners_service_min_tasks
-  resource_id        = "service/${aws_ecs_cluster.bloom.name}/${aws_ecs_service.bloom_site_partners.name}"
+  resource_id        = "service/${module.ecs_cluster.cluster_name}/${aws_ecs_service.bloom_site_partners.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
