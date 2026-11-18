@@ -27,11 +27,13 @@ data "aws_iam_policy_document" "data_stores" {
   statement {
     # Allow management of Bloom secrets.
     actions = [
+      "secretsmanager:GetSecret",
       "secretsmanager:DeleteSecret",
       "secretsmanager:DescribeSecret",
       "secretsmanager:GetResourcePolicy",
       "secretsmanager:PutResourcePolicy",
       "secretsmanager:PutSecretValue",
+      "secretsmanager:GetSecretValue",
       "secretsmanager:TagResource",
     ]
     resources = [
