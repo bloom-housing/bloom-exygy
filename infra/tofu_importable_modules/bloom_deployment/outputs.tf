@@ -7,3 +7,8 @@ output "db_dns_name" {
   value       = module.rds.db_dns_name
   description = "DNS name of the database."
 }
+
+output "ses_details" {
+  value       = module.ses.ses_details
+  description = "Details for the SES email address identity."
+}
