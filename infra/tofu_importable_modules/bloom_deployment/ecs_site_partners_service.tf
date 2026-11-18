@@ -74,7 +74,7 @@ resource "aws_ecs_task_definition" "bloom_site_partners" {
 resource "aws_ecs_service" "bloom_site_partners" {
   depends_on = [
     aws_ecs_service.bloom_api,
-    aws_route_table_association.private_subnet,
+    module.vpc.aws_route_table_association_private_subnet,
     null_resource.bloom_dbseed_run,
   ]
 
@@ -104,8 +104,8 @@ resource "aws_ecs_service" "bloom_site_partners" {
   }
 
   network_configuration {
-    security_groups  = [aws_security_group.bloom["site-partners"].id]
-    subnets          = [for s in aws_subnet.private : s.id]
+    security_groups  = [module.vpc.aws_security_groups["site-partners"]]
+    subnets          = module.vpc.aws_private_subnet_ids
     assign_public_ip = false
   }
 
