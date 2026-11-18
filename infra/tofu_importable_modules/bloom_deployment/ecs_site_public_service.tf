@@ -81,7 +81,7 @@ resource "aws_ecs_task_definition" "bloom_site_public" {
 resource "aws_ecs_service" "bloom_site_public" {
   depends_on = [
     aws_ecs_service.bloom_api,
-    aws_route_table_association.private_subnet,
+    module.vpc.aws_route_table_association_private_subnet,
     null_resource.bloom_dbseed_run,
   ]
   region                = var.aws_region
@@ -108,8 +108,8 @@ resource "aws_ecs_service" "bloom_site_public" {
   }
 
   network_configuration {
-    security_groups  = [aws_security_group.bloom["site-public"].id]
-    subnets          = [for s in aws_subnet.private : s.id]
+    security_groups  = [module.vpc.aws_security_groups["site-public"]]
+    subnets          = module.vpc.aws_private_subnet_ids
     assign_public_ip = false
   }
 

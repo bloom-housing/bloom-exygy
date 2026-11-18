@@ -76,8 +76,8 @@ resource "null_resource" "bloom_dbseed_run" {
   }
 
   depends_on = [
-    aws_vpc_endpoint.aws_services["secretsmanager"],
-    aws_route_table_association.private_subnet,
+    module.vpc.aws_vpc_secrets_manager_endpoint,
+    module.vpc.aws_route_table_association_private_subnet,
     time_sleep.on_dbseed_container_role_creation,
     null_resource.bloom_dbinit_run,
     aws_ecs_service.bloom_api, # need API to apply migrations before seed can run.
@@ -97,7 +97,7 @@ resource "null_resource" "bloom_dbseed_run" {
           --cluster ${module.ecs_cluster.arn} \
           --launch-type FARGATE \
           --task-definition ${aws_ecs_task_definition.bloom_dbseed[0].arn} \
-          --network-configuration "awsvpcConfiguration={subnets=[${join(",", [for s in aws_subnet.private : s.id])}],securityGroups=[${aws_security_group.bloom["dbseed"].id}],assignPublicIp=DISABLED}" \
+          --network-configuration "awsvpcConfiguration={subnets=[${join(",", [for s in module.vpc.aws_private_subnet_ids : s.id])}],securityGroups=[${module.vpc.aws_security_groups["dbseed"]}],assignPublicIp=DISABLED}" \
           --query 'tasks[0].taskArn' \
           --output text
       )"

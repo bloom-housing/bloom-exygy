@@ -96,8 +96,8 @@ resource "aws_ecs_task_definition" "bloom_api" {
 resource "aws_ecs_service" "bloom_api" {
   depends_on = [
     module.rds,
-    aws_vpc_endpoint.aws_services["secretsmanager"],
-    aws_route_table_association.private_subnet,
+    module.vpc.aws_vpc_secrets_manager_endpoint,
+    module.vpc.aws_route_table_association_private_subnet,
     null_resource.bloom_dbinit_run,
   ]
   wait_for_steady_state         = true # if tofu waits for the triggered deployment to complete.
@@ -129,8 +129,8 @@ resource "aws_ecs_service" "bloom_api" {
   }
 
   network_configuration {
-    security_groups  = [aws_security_group.bloom["api"].id]
-    subnets          = [for s in aws_subnet.private : s.id]
+    security_groups  = [module.vpc.aws_security_groups["api"]]
+    subnets          = module.vpc.aws_private_subnet_ids
     assign_public_ip = false
   }
 
