@@ -109,7 +109,8 @@ module "bloom_deployment" {
   bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
   bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
 
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+  # gitleaks thinks this is an API key, which it isn't. Adding an ingore to this line
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-3de29045580ba129a7cee4030085e64edaa539de" # gitleaks:allow
   bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
   bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
   bloom_site_public_env_vars = {
