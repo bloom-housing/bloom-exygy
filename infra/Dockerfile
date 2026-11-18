@@ -9,7 +9,7 @@
 # Use the `<version>-minimal` image. Explicitly pin the version tag and image sha.
 #
 # IMPORTANT: keep this in sync with ./Dockerfile.dev
-FROM ghcr.io/opentofu/opentofu:1.10.7-minimal@sha256:e8b80de6a840eb0e19d82aecbdaa2e2718cb107d15dbe849e6b550955aceacd2 AS opentofu
+FROM ghcr.io/opentofu/opentofu:1.13.9-minimal@sha256:84af0049634b7a7c455ab79c485818a8ef7f775cad3b2d42ce1c98ade720b5d1 AS opentofu
 
 # Use aws-cli image as the base image. It is built on amazonlinux base image.
 #

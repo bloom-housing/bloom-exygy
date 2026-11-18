@@ -76,7 +76,6 @@ module "ses" {
 
   aws_region     = var.aws_region
   ses_identities = var.ses_identities
-
 }
 
 module "secretsmanager" {
