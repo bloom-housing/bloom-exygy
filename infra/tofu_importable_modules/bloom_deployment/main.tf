@@ -71,6 +71,13 @@ module "s3" {
   is_prod     = local.is_prod
 }
 
+module "secretsmanager" {
+  source = "./secretsmanager"
+
+  aws_profile = var.aws_profile
+  aws_region  = var.aws_region
+}
+
 module "ses" {
   source = "./ses"
 
@@ -78,9 +85,9 @@ module "ses" {
   ses_identities = var.ses_identities
 }
 
-module "secretsmanager" {
-  source = "./secretsmanager"
+module "sms" {
+  source = "./sms"
 
-  aws_profile = var.aws_profile
-  aws_region  = var.aws_region
+  aws_region           = var.aws_region
+  bloom_api_sms_config = var.bloom_api_sms_config
 }
