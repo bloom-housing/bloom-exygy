@@ -15,7 +15,7 @@ locals {
     S3_PUBLIC_BUCKET           = module.s3.public_bucket_id
     SMS_PROVIDER               = var.bloom_api_sms_config == null ? "" : "aws"
     AWS_SMS_REGION             = var.bloom_api_sms_config == null ? "" : var.aws_region
-    AWS_SMS_ORIGINATION_NUMBER = var.bloom_api_sms_config == null ? "" : aws_pinpointsmsvoicev2_phone_number.api_sms[0].phone_number
+    AWS_SMS_ORIGINATION_NUMBER = var.bloom_api_sms_config == null ? "" : module.sms.aws_pinpointsmsvoicev2_phone_number.api_sms[0].phone_number
   }
 }
 
