@@ -27,7 +27,7 @@ variable "aws_public_subnet_ids" {
   description = "AWS VPC Public subnet id"
 }
 
-variable "aws_security_group_ids" {
+variable "aws_security_group_id" {
   type        = set(string)
   description = "Set of network security groups"
 }
