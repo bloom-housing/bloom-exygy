@@ -63,7 +63,8 @@ provider "registry.opentofu.org/hashicorp/external" {
 }
 
 provider "registry.opentofu.org/hashicorp/grafana" {
-  version = "4.28.2"
+  version     = "4.28.2"
+  constraints = "4.28.2"
   hashes = [
     "h1:2tXS/2WxLlX0ZhNO5Z0gVrikLmREnlpqX369L8VWyO4=",
     "h1:BTQ3P/tIBScLTy2qykZUzE3bcZkDW61NnTp4dIH0o8s=",
