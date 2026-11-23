@@ -36,7 +36,7 @@ module "ecs_cluster" {
   aws_db_master_user_secret = module.rds.master_user_secret
   aws_db_instance_id        = module.rds.aws_db_instance_id
 
-  aws_prometheus_workspace_arn = aws_prometheus_workspace.bloom.arn
+  aws_prometheus_workspace_arn = module.observability.aws_prometheus_workspace_arn
 
   bloom_dbseed_image = var.bloom_dbseed_image
 
@@ -288,6 +288,22 @@ module "ecs_dbseed_task" {
   bloom_dbseed_image      = var.bloom_dbseed_image
 
   domain_name = var.domain_name
+}
+
+module "observability" {
+  source = "./observability"
+
+  aws_profile        = var.aws_profile
+  aws_account_number = var.aws_account_number
+  aws_region         = var.aws_region
+
+  aws_cloudwatch_log_group_name = module.ecs_cluster.aws_task_log_group_names["bloom-api"]
+
+  bloom_otel_collector_image = var.bloom_otel_collector_image
+
+  grafana_editor_group_ids = var.grafana_editor_group_ids
+
+  observability_collection_enabled = var.observability_collection_enabled
 }
 
 module "rds" {
