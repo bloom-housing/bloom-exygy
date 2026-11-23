@@ -18,9 +18,9 @@ module "alb" {
   source = "./alb"
 
   aws_certificate_arn    = var.aws_certificate_arn
-  aws_vpc_id             = aws_vpc.bloom.id
-  aws_public_subnet_ids  = [for s in aws_subnet.public : s.id]
-  aws_security_group_ids = [aws_security_group.bloom["lb"].id]
+  aws_vpc_id             = module.vpc.aws_vpc_id
+  aws_public_subnet_ids  = module.vpc.aws_public_subnet_ids
+  aws_security_group_ids = [module.vpc.aws_security_groups["lb"]]
 
   aws_region  = var.aws_region
   domain_name = var.domain_name
@@ -52,8 +52,8 @@ module "rds" {
   source = "./rds"
 
   aws_region                     = var.aws_region
-  aws_private_subnet_ids         = [for s in aws_subnet.private : s.id]
-  aws_security_group_bloom_db_id = aws_security_group.bloom["db"].id
+  aws_private_subnet_ids         = module.vpc.aws_private_subnet_ids
+  aws_security_group_bloom_db_id = module.vpc.aws_security_groups["db"]
 
   database_config = local.database_config
 
@@ -90,4 +90,14 @@ module "sms" {
 
   aws_region           = var.aws_region
   bloom_api_sms_config = var.bloom_api_sms_config
+}
+
+module "vpc" {
+  source = "./vpc"
+
+  aws_region         = var.aws_region
+  bloom_dbseed_image = var.bloom_dbseed_image
+
+  vpc_cidr_range       = var.vpc_cidr_range
+  vpc_peering_settings = var.vpc_peering_settings
 }
