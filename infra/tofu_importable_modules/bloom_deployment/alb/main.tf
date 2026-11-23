@@ -10,7 +10,7 @@ resource "aws_lb" "bloom" {
   subnets            = var.aws_public_subnet_ids
 
   idle_timeout               = 60 # seconds
-  security_groups            = var.aws_security_group_ids
+  security_groups            = var.aws_security_group_id
   enable_zonal_shift         = true
   desync_mitigation_mode     = "strictest"
   drop_invalid_header_fields = true
