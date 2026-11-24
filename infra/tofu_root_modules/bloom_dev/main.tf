@@ -64,7 +64,6 @@ module "bloom_deployment" {
   # source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=3de29045580ba129a7cee4030085e64edaa539de"
   source = "../../tofu_importable_modules/bloom_deployment"
 
-  aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
   aws_region         = local.bloom_aws_region
 
@@ -95,6 +94,7 @@ module "bloom_deployment" {
     public_service_min_tasks = 1
     public_service_max_tasks = 2
   }
+
   db_high_availability = false
 
   #vpc_peering_settings = {
@@ -104,20 +104,19 @@ module "bloom_deployment" {
   #  allowed_cidr_range        = "172.31.0.0/16"         # default
   #}
 
-  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
-  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+  bloom_dbinit_image = "ghcr.io/bloom-housing/bloom/dbinit:gitsha-${var.git_sha}"
+  bloom_dbseed_image = "ghcr.io/bloom-housing/bloom/dbseed:gitsha-${var.git_sha}"
 
-  # gitleaks thinks this is an API key, which it isn't. Adding an ingore to this line
-  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-3de29045580ba129a7cee4030085e64edaa539de" # gitleaks:allow
-  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
-  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+  bloom_api_image           = "ghcr.io/bloom-housing/bloom/api:gitsha-${var.git_sha}"
+  bloom_site_partners_image = "ghcr.io/bloom-housing/bloom/partners:gitsha-${var.git_sha}"
+  bloom_site_public_image   = "ghcr.io/bloom-housing/bloom/public:gitsha-${var.git_sha}"
   bloom_site_public_env_vars = {
     JURISDICTION_NAME = "Bloomington"
     LANGUAGES         = "en,es,zh,vi,tl,ko,hy"
     RTL_LANGUAGES     = "ar,fa"
   }
 
-  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-3de29045580ba129a7cee4030085e64edaa539de"
+  bloom_otel_collector_image = "ghcr.io/bloom-housing/bloom/aws-otel-collector:gitsha-${var.git_sha}"
   grafana_editor_group_ids = [
     "f49854e8-4081-7033-9fd0-290a48f1a15a" # bloom-dev-deployers
   ]
