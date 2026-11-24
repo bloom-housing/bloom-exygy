@@ -6,6 +6,7 @@ terraform {
     }
   }
   backend "s3" {
+    # profile      = local.sso_profile_id
     region       = local.tofu_state_bucket_region
     bucket       = local.tofu_state_bucket_name
     key          = "${local.tofu_state_key_prefix}/state"
@@ -27,6 +28,7 @@ locals {
 }
 
 provider "aws" {
+  # profile = local.sso_profile_id
   region = local.bloom_aws_region
 }
 
@@ -64,6 +66,7 @@ module "bloom_deployment" {
   # source = "git::https://github.com/bloom-housing/bloom.git//infra/tofu_importable_modules/bloom_deployment?ref=3de29045580ba129a7cee4030085e64edaa539de"
   source = "../../tofu_importable_modules/bloom_deployment"
 
+  aws_profile        = local.sso_profile_id
   aws_account_number = local.bloom_aws_account_number
   aws_region         = local.bloom_aws_region
 
