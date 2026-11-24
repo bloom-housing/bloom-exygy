@@ -1,10 +1,10 @@
 name: Dev Tofu Plan
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  WORKING_DIR: "./infra/tofu_root_modules/bloom_dev"
+
 on:
   issue_comment:
-    types: [created, edited, deleted]
+    types: [created, ]
   # pull_request:
   #   branches: [main]
 
@@ -20,7 +20,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: xt0rted/pull-request-comment-branch@v3
+      id: comment-branch
+    
     - uses: actions/checkout@v2.5.0
+      with:
+        ref: ${{ steps.comment-branch.outputs.head_ref}}
+
+    - run: echo "Running on branch ${{ steps.comment-branch.outputs.head_ref }}"
 
     # Authenticate with AWS using OIDC - no secrets needed
     - name: Configure AWS credentials
@@ -34,13 +41,16 @@ jobs:
       uses: opentofu/setup-opentofu@v2
 
     - name: Tofu Init
-      working-directory: ${{ env.WORKING_DIR }}
-      run: tofu init
+      run: |
+        echo `pwd`
+        echo "tfpath ./infra/tofu_root_modules/bloom_dev"
+        tofu init
 
     - name: Tofu Plan
       id: plan
-      working-directory: ${{ env.WORKING_DIR }}
       run: |
+        echo `pwd`
+        echo "tfpath ./infra/tofu_root_modules/bloom_dev"
         echo "** Running Terraform Validate **"
         tofu validate
 
