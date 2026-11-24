@@ -4,8 +4,9 @@ env:
 
 on:
   issue_comment:
-  pull_request:
-    branches: [main]
+    types: [created, edited, deleted]
+  # pull_request:
+  #   branches: [main]
 
 permissions:
   id-token: write   # Required for requesting the OIDC JWT
@@ -92,7 +93,7 @@ jobs:
               body: body,
             });
           }
-          
+
     - name: Upload Plan
       uses: actions/upload-artifact@v7
       with:
