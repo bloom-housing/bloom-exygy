@@ -6,7 +6,6 @@ terraform {
     }
   }
   backend "s3" {
-    profile      = "${local.bloom_deployment}-deployer"
     region       = local.tofu_state_bucket_region
     bucket       = local.tofu_state_bucket_name
     key          = "${local.tofu_state_key_prefix}/state"
@@ -28,8 +27,7 @@ locals {
 }
 
 provider "aws" {
-  profile = local.sso_profile_id
-  region  = local.bloom_aws_region
+  region = local.bloom_aws_region
 }
 
 # Create and validate a certificate for bloom_deployment module to deploy successfully. See the
