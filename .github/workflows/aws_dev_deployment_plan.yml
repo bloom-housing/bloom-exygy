@@ -1,10 +1,10 @@
 name: Dev Tofu Plan
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+  WORKING_DIR: "./infra/tofu_root_modules/bloom_dev"
 on:
   issue_comment:
-    types: [created, ]
+    types: [created, edited, deleted]
   # pull_request:
   #   branches: [main]
 
@@ -41,16 +41,13 @@ jobs:
       uses: opentofu/setup-opentofu@v2
 
     - name: Tofu Init
-      run: |
-        echo `pwd`
-        echo "tfpath ./infra/tofu_root_modules/bloom_dev"
-        tofu init
+      working-directory: ${{ env.WORKING_DIR }}
+      run: tofu init
 
     - name: Tofu Plan
       id: plan
+      working-directory: ${{ env.WORKING_DIR }}
       run: |
-        echo `pwd`
-        echo "tfpath ./infra/tofu_root_modules/bloom_dev"
         echo "** Running Terraform Validate **"
         tofu validate
 
