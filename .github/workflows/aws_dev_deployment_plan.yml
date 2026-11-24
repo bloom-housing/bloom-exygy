@@ -1,0 +1,101 @@
+name: AWS Prod Deployment
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+on:
+  issue_comment:
+    types: [created, edited, deleted]
+  # pull_request:
+  #   branches: [main]
+
+permissions:
+  id-token: write   # Required for requesting the OIDC JWT
+  contents: read     # Required for actions/checkout
+  pull-requests: write  # Required for plan comments
+
+jobs:
+  plan:
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, 'tofu plan') }}
+    name: Tofu Validation and Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2.5.0
+
+    # Authenticate with AWS using OIDC - no secrets needed
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::242477209009:role/terraform-github-actions
+        aws-region: us-east-1
+        # Optional: role session name for CloudTrail auditing
+        role-session-name: github-actions-terraform-${{ github.run_id }}
+    - name: Setup OpenTofu
+      uses: opentofu/setup-opentofu@v2
+
+    - name: Tofu Init
+      run: |
+        echo `pwd`
+        echo "tfpath ./infra/tofu_root_modules/bloom_dev"
+        tofu init
+
+    - name: Tofu Plan
+      id: plan
+      run: |
+        echo `pwd`
+        echo "tfpath ./infra/tofu_root_modules/bloom_dev"
+        echo "** Running Terraform Validate **"
+        tofu validate
+
+        echo "** Running Terraform Plan **"
+        tofu plan -var git_sha=49ec86746e3810797460bae7f6edec6ed2ed3018 -out=plan.bin 2>&1 | tee plan-output.txt
+        tofu show -no-color plan.bin > plan-readable.txt
+      continue-on-error: true
+    - name: Comment Plan on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const fs = require('fs');
+          const plan = fs.readFileSync('${{ env.WORKING_DIR }}/plan-readable.txt', 'utf8');
+          const truncated = plan.length > 60000
+            ? plan.substring(0, 60000) + '\n\n... (truncated)'
+            : plan;
+
+          const body = `## OpenTofu Plan
+
+          ```
+          ${truncated}
+          ```
+          *Pushed by: @${{ github.actor }}*`;
+          // Find existing comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const botComment = comments.find(c =>
+            c.body.includes('## OpenTofu Plan')
+          );
+
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body,
+            });
+          }
+
+    - name: Upload Plan
+      uses: actions/upload-artifact@v7
+      with:
+        name: plan
+        path: ${{ env.WORKING_DIR }}/plan.bin
