@@ -46,6 +46,7 @@ resource "aws_acm_certificate" "bloom" {
     create_before_destroy = true
   }
 }
+
 output "certificate_details" {
   value = {
     certificate_arn    = aws_acm_certificate.bloom.arn
@@ -140,18 +141,22 @@ module "bloom_deployment" {
 
   observability_collection_enabled = var.observability_collection_enabled
 }
+
 output "aws_lb_dns_name" {
   value       = module.bloom_deployment.lb_dns_name
   description = "DNS name of the load balancer."
 }
+
 output "aws_db_dns_name" {
   value       = module.bloom_deployment.db_dns_name
   description = "DNS name of the database."
 }
+
 output "ses_details" {
   value       = module.bloom_deployment.ses_details
   description = "Details for the SES email address identity."
 }
+
 output "grafana_url" {
   value       = module.bloom_deployment.grafana_url
   description = "URL of the managed grafana workspace."

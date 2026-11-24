@@ -185,4 +185,3 @@ resource "aws_iam_role_policy" "bloom_container" {
   role     = aws_iam_role.bloom_container[each.key].id
   policy   = each.value.container_policy
 }
-

@@ -48,3 +48,58 @@ resource "aws_ssoadmin_permission_set_inline_policy" "deployer" {
 
   depends_on = [aws_ssoadmin_customer_managed_policy_attachment.deployer]
 }
+
+
+# Create the IAM role for github actions in terraform
+# identiy manager policy must have permissions to manipulate roles 
+# GetRole, CreateRole, DeleteRole, 
+# TagRole, UntagRole, ListRolePolicies
+# ListAttachedRolePolicies, ListInstanceProfilesForRole
+# iam:AttachRolePolicy, iam:DetachRolePolicy
+resource "aws_iam_role" "bloom_terraform_github_actions" {
+  provider = aws.deployment_account
+  name     = "bloom-terraform-github-actions"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::${var.bloom_deployment_aws_account_number}:oidc-provider/token.actions.githubusercontent.com"
+        }
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            # Allow the specific repository
+            "token.actions.githubusercontent.com:sub" = [
+              # Main branch deployments
+              "repo:bloom-housing/bloom-exygy:ref:refs/heads/main",
+              # Pull request plans
+              "repo:bloom-housing/bloom-exygy:pull_request",
+            ]
+          }
+        }
+      }
+    ]
+  })
+
+  # Maximum session duration (1 hour for Terraform runs)
+  max_session_duration = 3600
+
+  tags = {
+    Purpose = "GitHub Actions Terraform deployments"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "bloom_terraform_github_actions_attachment" {
+  provider = aws.deployment_account
+
+  depends_on = [aws_iam_policy.deployer]
+  for_each   = aws_iam_policy.deployer
+  role       = aws_iam_role.bloom_terraform_github_actions.name
+  policy_arn = aws_iam_policy.deployer[each.key].arn
+}
