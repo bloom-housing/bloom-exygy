@@ -58,7 +58,7 @@ resource "aws_ssoadmin_permission_set_inline_policy" "deployer" {
 # iam:AttachRolePolicy, iam:DetachRolePolicy
 resource "aws_iam_role" "bloom_terraform_github_actions" {
   provider = aws.deployment_account
-  name     = "bloom-terraform-github-actions"
+  name     = "bloom-terraform-cicd-actions"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
