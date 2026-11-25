@@ -36,7 +36,7 @@ jobs:
         role-to-assume: arn:aws:iam::242477209009:role/bloom-terraform-github-actions
         aws-region: us-east-1
         # Optional: role session name for CloudTrail auditing
-        role-session-name: github-actions-terraform-${{ github.run_id }}
+        # role-session-name: github-actions-terraform-${{ github.run_id }}
     - name: Setup OpenTofu
       uses: opentofu/setup-opentofu@v2
 
